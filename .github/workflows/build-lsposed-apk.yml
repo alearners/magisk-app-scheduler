@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           SDKMANAGER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
           "$SDKMANAGER" --version
-          yes | "$SDKMANAGER" --licenses > /dev/null
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Set up Gradle
