@@ -1,0 +1,110 @@
+name: Build Magisk Module
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Package module ZIP
+    runs-on: ubuntu-latest
+    outputs:
+      zip_name: ${{ steps.prepare.outputs.zip_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read module.prop and prepare build vars
+        id: prepare
+        run: |
+          set -euo pipefail
+          PROP=module/module.prop
+          for key in id name version versionCode; do
+            value=$(grep -m1 -E "^${key}=" "$PROP" | cut -d= -f2- | tr -d '\r' || true)
+            echo "${key}=${value}" >> "$GITHUB_OUTPUT"
+            echo "module.${key}=${value}" >> "$GITHUB_ENV"
+          done
+          ZIP_NAME="$(grep -m1 -E '^id=' "$PROP" | cut -d= -f2- | tr -d '\r')-$(grep -m1 -E '^version=' "$PROP" | cut -d= -f2- | tr -d '\r').zip"
+          echo "zip_name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
+          echo "打包文件：${ZIP_NAME}"
+          cat "$PROP"
+
+      - name: Normalize line endings (CRLF -> LF)
+        run: |
+          set -euo pipefail
+          find module -type f \( -name '*.sh' -o -name '*.prop' -o -name 'update-binary' -o -name 'updater-script' -o -name '*.md' \) -print0 \
+            | xargs -0 -r sed -i 's/\r$//'
+          echo "已统一为 LF"
+
+      - name: Fix permissions
+        run: |
+          set -euo pipefail
+          find module -type f -name '*.sh' -print0 | xargs -0 -r chmod 0755
+          chmod 0755 module/META-INF/com/google/android/update-binary
+          chmod 0644 module/META-INF/com/google/android/updater-script module/module.prop
+          ls -l module module/META-INF/com/google/android
+
+      - name: Verify required files
+        run: |
+          set -euo pipefail
+          for f in module/module.prop \
+                   module/config.sh \
+                   module/service.sh \
+                   module/run_app.sh \
+                   module/customize.sh \
+                   module/uninstall.sh \
+                   module/META-INF/com/google/android/update-binary; do
+            test -f "$f" || { echo "缺少文件: $f"; exit 1; }
+          done
+          echo "必需文件齐全"
+
+      - name: Shell syntax check
+        run: |
+          set -euo pipefail
+          for f in module/*.sh; do
+            echo "检查 $f"
+            sh -n "$f"
+          done
+
+      - name: Build ZIP
+        run: |
+          set -euo pipefail
+          cd module
+          zip -r -X "../${ZIP_NAME}" . \
+            -x '*.DS_Store' -x '*/.git/*' -x '/crontab_dir/*'
+          cd ..
+          echo "=== ZIP 内容 ==="
+          unzip -l "$ZIP_NAME"
+          sha256sum "$ZIP_NAME" | tee "${ZIP_NAME}.sha256"
+          ls -lh "$ZIP_NAME"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.prepare.outputs.zip_name }}
+          path: |
+            ${{ steps.prepare.outputs.zip_name }}
+            ${{ steps.prepare.outputs.zip_name }}.sha256
+          if-no-files-found: error
+
+      - name: Publish release (tag only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.prepare.outputs.zip_name }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            ${{ steps.prepare.outputs.zip_name }}
+            ${{ steps.prepare.outputs.zip_name }}.sha256
+          generate_release_notes: true

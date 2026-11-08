@@ -1,0 +1,118 @@
+#!/system/bin/sh
+# ============================================================
+#  定时启动 App —— 开机服务
+#  读取 config.sh 中的 SCHEDULE_CRON_LINES，动态生成 crontab
+#  并启动 BusyBox crond。修改调度后重跑本脚本即可生效。
+# ============================================================
+
+umask 022
+export PATH=/data/adb/magisk:/system/bin:/system/xbin:/sbin:/vendor/bin:/product/bin
+
+MODDIR=${0%/*}
+CONFIG_FILE="$MODDIR/config.sh"
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 缺少 config.sh，模块未启动" >> /data/local/tmp/app_scheduler.log
+    exit 1
+fi
+
+# 先加载配置，才能拿到日志路径与等待时间
+. "$CONFIG_FILE"
+
+LOG_FILE=${LOG_FILE:-/data/local/tmp/app_scheduler.log}
+WAIT_BOOT_EXTRA=${WAIT_BOOT_EXTRA:-5}
+ENABLE_NOTIFY=${ENABLE_NOTIFY:-0}
+NOTIFY_TITLE=${NOTIFY_TITLE:-定时启动 App}
+NOTIFY_TAG=${NOTIFY_TAG:-app_scheduler}
+
+mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [service] $1" >> "$LOG_FILE"
+}
+
+notify() {
+    [ "$ENABLE_NOTIFY" = "1" ] || return 0
+    cmd notification post -S bigtext -t "$NOTIFY_TITLE" "$NOTIFY_TAG" "$1" >/dev/null 2>&1
+}
+
+log "=== 开机服务启动 ==="
+
+# ---------- 等待系统启动完成（最多 300 秒） ----------
+COUNT=0
+while [ "$(getprop sys.boot_completed)" != "1" ]; do
+    sleep 2
+    COUNT=$((COUNT + 2))
+    if [ "$COUNT" -ge 300 ]; then
+        log "等待 sys.boot_completed 超时，继续尝试启动 crond"
+        break
+    fi
+done
+
+# 额外等待，避免过早启动 crond
+sleep "$WAIT_BOOT_EXTRA"
+
+# ---------- 查找 BusyBox ----------
+BUSYBOX="/data/adb/magisk/busybox"
+if [ ! -x "$BUSYBOX" ]; then
+    BUSYBOX=$(command -v busybox 2>/dev/null)
+fi
+if [ ! -x "$BUSYBOX" ]; then
+    BUSYBOX="/data/adb/ksu/bin/busybox"
+fi
+if [ ! -x "$BUSYBOX" ]; then
+    log "未找到 BusyBox，crond 未启动"
+    notify "crond 未启动：未找到 BusyBox"
+    exit 1
+fi
+log "BusyBox: $BUSYBOX"
+
+# ---------- 根据配置动态生成 crontab ----------
+CRONTAB_DIR="$MODDIR/crontab_dir"
+mkdir -p "$CRONTAB_DIR"
+CRONTAB_FILE="$CRONTAB_DIR/root"
+LIST_FILE="$CRONTAB_DIR/.schedule_lines"
+
+: > "$CRONTAB_FILE"
+: > "$LIST_FILE"
+printf '%s\n' "$SCHEDULE_CRON_LINES" > "$LIST_FILE"
+
+TASK_COUNT=0
+while IFS= read -r line; do
+    # 去掉行首尾空白与 Windows 残留的 CR
+    line=$(printf '%s' "$line" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    case "$line" in
+        ""|\#*) continue ;;
+    esac
+    echo "$line $MODDIR/run_app.sh >> $LOG_FILE 2>&1" >> "$CRONTAB_FILE"
+    TASK_COUNT=$((TASK_COUNT + 1))
+done < "$LIST_FILE"
+rm -f "$LIST_FILE"
+
+if [ "$TASK_COUNT" -le 0 ]; then
+    log "SCHEDULE_CRON_LINES 中没有有效的调度行，crond 未启动"
+    notify "调度配置为空，crond 未启动"
+    exit 1
+fi
+
+log "已生成 $TASK_COUNT 条定时任务："
+while IFS= read -r line; do
+    log "  $line"
+done < "$CRONTAB_FILE"
+
+# ---------- 清理旧 crond 后重新启动 ----------
+pkill crond 2>/dev/null
+sleep 1
+
+"$BUSYBOX" crond -b -c "$CRONTAB_DIR" -l 2
+sleep 2
+
+CROND_PID=$("$BUSYBOX" pidof crond 2>/dev/null)
+if [ -z "$CROND_PID" ]; then
+    log "crond 启动失败"
+    notify "crond 启动失败"
+    exit 1
+fi
+
+log "crond 已启动 (pid $CROND_PID)，调度生效"
+log "=== 开机服务结束 ==="

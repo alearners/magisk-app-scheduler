@@ -1,0 +1,10 @@
+build/
+*.zip
+*.apk
+*.keystore
+*.jks
+.gradle/
+local.properties
+module/crontab_dir/
+.DS_Store
+Thumbs.db
