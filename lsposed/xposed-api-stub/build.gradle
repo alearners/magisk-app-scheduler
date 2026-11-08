@@ -6,3 +6,24 @@ java {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
 }
+
+// Xposed v82 的 LoadPackageParam 引用了 android.content.pm.ApplicationInfo，
+// 因此这个编译期桩需要 android.jar 才能编译。取 SDK 位置：环境变量优先，
+// 其次读 local.properties 的 sdk.dir（两种来源在本地和 GitHub Actions 都成立）。
+def androidSdkDir = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT')
+if (!androidSdkDir) {
+    def props = new Properties()
+    def localFile = file('../local.properties')
+    if (localFile.exists()) {
+        localFile.withInputStream { props.load(it) }
+        androidSdkDir = props.getProperty('sdk.dir')
+    }
+}
+def androidJar = androidSdkDir ? file("${androidSdkDir}/platforms/android-34/android.jar") : null
+if (androidJar != null && androidJar.exists()) {
+    dependencies {
+        compileOnly files(androidJar)
+    }
+} else {
+    logger.warn("xposed-api-stub: 未找到 android.jar（ANDROID_HOME 或 local.properties 的 sdk.dir），ApplicationInfo 解析可能失败")
+}
