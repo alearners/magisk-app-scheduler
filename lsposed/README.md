@@ -112,3 +112,7 @@ logcat -s LSPosed | grep AppScheduler
 若 `handleHideKeyguard` 等候选方法在 HyperOS 上不存在，日志会输出每个候选失败的异常，此时模块自动退回 `wm dismiss-keyguard` 与上滑密码路径，功能不会中断。
 
 > 说明：`xposed-api-stub/` 只是编译期桩模块（`compileOnly`），提供 `de.robv.android.xposed` v82 的接口签名，不会打进 APK；运行期由 LSPosed 提供实现。
+
+## 许可证
+
+GNU General Public License v3.0（GPL-3.0），完整条款见仓库根目录 [`LICENSE`](../LICENSE)。分发修改版本时须同样以 GPL-3.0 开源并保留版权声明。
