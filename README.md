@@ -17,7 +17,28 @@
 
 `lsposed` 分支在 `main` 的基础上新增 `lsposed/` 工程：APK 自带界面与定时器，通过 `su` 执行与 shell 版等价的流程，并用 Xposed 钩子在 SystemUI 内收起 Keyguard，注入密码只作为兜底。
 
-界面用 **Kotlin + Jetpack Compose（Material3）** 重写：状态卡、调度配置卡、操作按钮、滚动日志卡四块结构，圆角卡片 + 青蓝主色（`#1FA0CC`）+ 浅蓝灰背景，Android 12 以上跟随系统动态取色，整体风格参考开源项目 Sesame-AG 的 Compose 主题与卡片式布局。
+LSPosed 版支持**多应用、多计划、多定时方式、启动条件**：界面里可直接浏览并勾选已安装应用（无需手输包名），一个计划可同时启动多个 App，定时可选「按时间点 / 按星期 / 按间隔循环」并设置总执行次数，还能限定「仅充电 / 仅 WiFi / 仅屏幕熄灭」时执行。
+
+界面用 **Kotlin 2.0.21 + Jetpack Compose（Material3）** 编写：计划列表、计划编辑、应用选择、运行日志四个页面，圆角卡片 + 青蓝主色（`#1FA0CC`）+ 浅蓝灰背景，Android 12 以上跟随系统动态取色，整体风格参考开源项目 Sesame-AG 的 Compose 主题与卡片式布局。
+
+### 界面预览
+
+| 计划列表 | 计划编辑（按时间点） |
+| --- | --- |
+| <img src="docs/screenshots/01-plan-list.png" width="250"> | <img src="docs/screenshots/02-plan-edit-times.png" width="250"> |
+
+| 计划编辑（按间隔循环 + 循环次数） | 选择应用 | 运行日志 |
+| --- | --- | --- |
+| <img src="docs/screenshots/03-plan-edit-interval.png" width="200"> | <img src="docs/screenshots/04-app-picker.png" width="200"> | <img src="docs/screenshots/05-run-log.png" width="200"> |
+
+这些图不是设计稿，而是用 **Paparazzi（layoutlib）把仓库里的真实 Compose 代码跑在 JVM 上渲染出来的 PNG**。场景与样例数据定义在 `lsposed` 分支的 `lsposed/app/src/test/java/com/appscheduler/lsposed/ScreenshotTest.kt`（三个样例计划、两份计划编辑页、已选两个应用的选择器、一段含条件跳过与手动解锁兜底的日志）：
+
+```bash
+cd lsposed && ./gradlew :app:recordPaparazziDebug
+# 产物在 lsposed/app/src/test/snapshots/images/，按需拷到 docs/screenshots/
+```
+
+界面里的应用名统一用 `com.example.*` 占位包名，与文档、脚本一致，不出现任何真实应用名。
 
 ---
 
@@ -64,7 +85,9 @@
 │   └── uninstall.sh
 ├── scripts/package.sh            # 本地打包（与 CI 等价，便于自查）
 ├── tests/run_app_stub_test.sh    # 桩测试：无需真机验证 run_app.sh 分支
-├── docs/DEVELOPMENT.md           # 开发文档
+├── docs/
+│   ├── DEVELOPMENT.md            # 开发文档
+│   └── screenshots/              # 界面截图（Paparazzi 渲染真实 Compose 界面）
 └── lsposed/                      # 仅 lsposed 分支存在
 ```
 
@@ -192,6 +215,7 @@ sh scripts/package.sh          # 生成 build/app_scheduler-v1.4.zip，与 CI �
 
 | 版本 | versionCode | 变更 |
 | --- | --- | --- |
+| lsposed v1.5 | 6 | 应用选择器、多 App 单计划、多计划并存、三种定时方式、循环次数、启动条件；界面 Kotlin + Compose 重写，截图由 Paparazzi 渲染 |
 | v1.4 | 5 | `action.sh`、`wm dismiss-keyguard` 前置解锁、`APP_ACTIVITY`、手动解锁兜底、GitHub Actions 打包、移除蓝牙解锁方向、新增 lsposed 分支 |
 | v1.3 | 4 | 参数集中到 `config.sh`、多时间点调度、日志轮转份数可配置、`customize.sh` |
 | v1.2 | 3 | 失败通知、单实例锁、坐标自适应 |
