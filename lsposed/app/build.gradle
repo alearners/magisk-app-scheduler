@@ -1,5 +1,7 @@
 plugins {
     id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
 }
 
 android {
@@ -12,11 +14,11 @@ android {
         targetSdk 34
         versionCode 5
         versionName "1.4"
+        vectorDrawables { useSupportLibrary = true }
     }
 
     buildTypes {
         debug {
-            // 便于本地与 CI 直接产出可安装的 APK
             minifyEnabled false
         }
         release {
@@ -26,9 +28,17 @@ android {
         }
     }
 
+    buildFeatures {
+        compose = true
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+        jvmTarget = '11'
     }
 
     lint {
@@ -38,6 +48,20 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.activity:activity-compose:1.9.2'
+    implementation 'com.google.android.material:material:1.12.0'
+
+    implementation platform('androidx.compose:compose-bom:2024.09.03')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.material:material-icons-core'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+
     // 仅编译期引用 Xposed API（de.robv.android.xposed v82 接口），运行期由 LSPosed 提供
     compileOnly project(':xposed-api-stub')
 }

@@ -17,6 +17,8 @@
 
 `lsposed` 分支在 `main` 的基础上新增 `lsposed/` 工程：APK 自带界面与定时器，通过 `su` 执行与 shell 版等价的流程，并用 Xposed 钩子在 SystemUI 内收起 Keyguard，注入密码只作为兜底。
 
+界面用 **Kotlin + Jetpack Compose（Material3）** 重写：状态卡、调度配置卡、操作按钮、滚动日志卡四块结构，圆角卡片 + 青蓝主色（`#1FA0CC`）+ 浅蓝灰背景，Android 12 以上跟随系统动态取色，整体风格参考开源项目 Sesame-AG 的 Compose 主题与卡片式布局。
+
 ---
 
 ## 功能特性
@@ -38,7 +40,7 @@
 3. 新增可选 `APP_ACTIVITY`，可绕过 `monkey` 直接指定启动 Activity；
 4. 打包全部迁到 GitHub Actions（统一 LF、755 权限、ZIP 结构校验、sha256、Tag 自动发布）；
 5. 移除「蓝牙解锁方案」这一改进方向，解锁链只保留 `wm` + 上滑密码两条路径；
-6. 新增 `lsposed` 分支：Xposed 钩子替代密码注入的模块形态。
+6. 新增 `lsposed` 分支：Xposed 钩子替代密码注入的模块形态，界面用 Kotlin + Compose 重写。
 
 ---
 
@@ -170,7 +172,7 @@ git push origin v1.4
 ### lsposed 分支（APK）
 
 - 触发：push 到 `lsposed`、`lsposed-v*` 标签、手动触发。
-- 步骤：JDK 17 + Gradle → `:app:assembleDebug` → 重命名并上传 `app-scheduler-lsposed-vX.apk` → 标签时发布 Release。
+- 步骤：JDK 17 + Gradle 8.7 → `:app:assembleRelease` → 重命名并上传 `app-scheduler-lsposed-vX.apk` + sha256 → 标签时发布 Release。
 
 ### 本地自查
 

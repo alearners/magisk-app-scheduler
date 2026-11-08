@@ -10,6 +10,30 @@
 | 执行权限 | 模块脚本天然 root | App 内 `su -c` |
 | 配置 | 编辑 `config.sh` | App 界面（包名 / 密码 / 时间点 / 开关） |
 
+## 界面（Kotlin + Jetpack Compose）
+
+界面不再用 Java 手工搭控件，改成 **Kotlin 2.0.21 + Jetpack Compose（Material3，Compose BOM 2024.09.03）**，单屏四块卡片：
+
+| 区域 | 内容 |
+| --- | --- |
+| 顶部栏 | 标题「定时启动 App」+ 副标题说明 LSPosed 版复用 Magisk 版流程 |
+| 状态卡 | 启用状态、下次执行时间（`MM-dd HH:mm`）、执行中的「运行中」标记 |
+| 配置卡 | 目标包名、执行时间点、锁屏密码三个输入框 + 「启用定时任务」开关 |
+| 操作行 | 「保存并应用」（写入配置并重排闹钟）、「立即执行一次」（后台线程跑 `TaskRunner`，按钮转圈） |
+| 日志卡 | 等宽字体只读日志 + 「刷新」「清空」，可直接长按复制 |
+
+配色与布局参考开源项目 **Sesame-AG** 的 Compose 主题：主色 `#1FA0CC`（青蓝）、主色容器 `#BBEAFF`、次色 `#4C616B`、背景/表面 `#F5FAFD`、错误色 `#BA1A1A`，卡片圆角 20dp；同时提供对应的深色方案，Android 12 及以上启用系统动态取色（`dynamicLightColorScheme` / `dynamicDarkColorScheme`）。只借鉴设计风格，未引入其任何业务代码。
+
+对应文件：
+
+```
+app/src/main/java/com/appscheduler/lsposed/MainActivity.kt   # ComponentActivity + setContent + enableEdgeToEdge
+app/src/main/java/com/appscheduler/lsposed/ui/Theme.kt        # Material3 配色 / 深色 / 动态取色
+app/src/main/java/com/appscheduler/lsposed/ui/MainScreen.kt   # 状态卡 / 配置卡 / 操作行 / 日志卡
+```
+
+Java 侧只保留调度、执行与钩子（`Scheduler` / `TaskRunner` / `XposedEntry` 等），这样注入 SystemUI 的钩子不依赖 Kotlin 运行时，界面则完全用 Compose 编写。
+
 ## 工作原理
 
 1. **调度**：`Scheduler` 解析界面里配置的时间点（`HH:MM` 逗号分隔），取最近一个时间点用 `AlarmManager` 精确定时；`AlarmReceiver` 触发后执行一次任务并排下一次；`BootReceiver` 开机重排。
