@@ -8,3 +8,5 @@ local.properties
 module/crontab_dir/
 .DS_Store
 Thumbs.db
+# Paparazzi 渲染时生成的原始截图；README 引用的副本放在 docs/screenshots/
+lsposed/app/src/test/snapshots/

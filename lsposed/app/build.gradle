@@ -2,6 +2,7 @@ plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.compose'
+    id 'app.cash.paparazzi'
 }
 
 android {
@@ -45,6 +46,11 @@ android {
         abortOnError false
         checkReleaseBuilds false
     }
+
+    testOptions {
+        // Paparazzi 需要在 JVM 上加载资源与布局库来渲染真实界面
+        unitTests.includeAndroidResources = true
+    }
 }
 
 dependencies {
@@ -65,4 +71,6 @@ dependencies {
 
     // 仅编译期引用 Xposed API（de.robv.android.xposed v82 接口），运行期由 LSPosed 提供
     compileOnly project(':xposed-api-stub')
+
+    testImplementation 'junit:junit:4.13.2'
 }

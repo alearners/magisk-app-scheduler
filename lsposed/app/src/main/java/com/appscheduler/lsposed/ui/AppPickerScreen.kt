@@ -1,5 +1,6 @@
 package com.appscheduler.lsposed.ui
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,7 +41,9 @@ import kotlinx.coroutines.withContext
 fun AppPickerScreen(
     selected: List<String>,
     onConfirm: (List<String>) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    // 应用列表来源，默认读系统已安装应用；截图测试可注入固定数据
+    appLoader: suspend (Context) -> List<AppEntry> = { AppCatalog.load(it) }
 ) {
     val context = LocalContext.current
     var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
@@ -50,7 +53,7 @@ fun AppPickerScreen(
 
     LaunchedEffect(Unit) {
         loading = true
-        apps = withContext(Dispatchers.IO) { AppCatalog.load(context) }
+        apps = withContext(Dispatchers.IO) { appLoader(context) }
         loading = false
     }
 

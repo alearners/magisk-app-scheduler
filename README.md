@@ -21,6 +21,25 @@ LSPosed 版支持**多应用、多计划、多定时方式、启动条件**：�
 
 界面用 **Kotlin + Jetpack Compose（Material3）** 编写：计划列表、计划编辑、应用选择、运行日志四个页面，圆角卡片 + 青蓝主色（`#1FA0CC`）+ 浅蓝灰背景，Android 12 以上跟随系统动态取色，整体风格参考开源项目 Sesame-AG 的 Compose 主题与卡片式布局。
 
+### 界面预览
+
+| 计划列表 | 计划编辑（按时间点） |
+| --- | --- |
+| <img src="docs/screenshots/01-plan-list.png" width="250"> | <img src="docs/screenshots/02-plan-edit-times.png" width="250"> |
+
+| 计划编辑（按间隔循环 + 循环次数） | 选择应用 | 运行日志 |
+| --- | --- | --- |
+| <img src="docs/screenshots/03-plan-edit-interval.png" width="200"> | <img src="docs/screenshots/04-app-picker.png" width="200"> | <img src="docs/screenshots/05-run-log.png" width="200"> |
+
+截图不是示意图，而是用 **Paparazzi（layoutlib）把仓库里的真实 Compose 代码渲染出来的 PNG**：`lsposed/app/src/test/java/com/appscheduler/lsposed/ScreenshotTest.kt` 里给四个页面各构造一份样例数据（多个计划、三种定时方式、循环次数、启动条件、已选应用、日志），跑一次任务即重新生成：
+
+```bash
+cd lsposed && ./gradlew :app:recordPaparazziDebug
+# 产物：app/src/test/snapshots/images/*.png，按需拷到 docs/screenshots/
+```
+
+界面里的应用名统一用 `com.example.*` 占位包名，同样不出现任何真实应用名。
+
 ---
 
 ## 功能特性

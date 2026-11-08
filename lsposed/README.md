@@ -40,6 +40,25 @@
 
 配色与布局参考开源项目 **Sesame-AG** 的 Compose 主题：主色 `#1FA0CC`（青蓝）、主色容器 `#BBEAFF`、次色 `#4C616B`、背景/表面 `#F5FAFD`、错误色 `#BA1A1A`，卡片圆角 20dp；另有深色方案，Android 12 及以上启用系统动态取色。只借鉴设计风格，未引入其任何业务代码。
 
+### 截图
+
+| 计划列表 | 计划编辑（按时间点） | 计划编辑（按间隔循环） |
+| --- | --- | --- |
+| <img src="../docs/screenshots/01-plan-list.png" width="200"> | <img src="../docs/screenshots/02-plan-edit-times.png" width="200"> | <img src="../docs/screenshots/03-plan-edit-interval.png" width="200"> |
+
+| 选择应用 | 运行日志 |
+| --- | --- |
+| <img src="../docs/screenshots/04-app-picker.png" width="260"> | <img src="../docs/screenshots/05-run-log.png" width="260"> |
+
+这些 PNG 由 **Paparazzi（layoutlib）直接渲染本仓库的真实 Compose 代码**得到，不是设计稿：
+
+```bash
+gradle -p lsposed :app:recordPaparazziDebug
+# 产物在 lsposed/app/src/test/snapshots/images/
+```
+
+场景定义在 `app/src/test/java/com/appscheduler/lsposed/ScreenshotTest.kt`：构造三个样例计划（按时间点 / 按间隔循环 + 次数 / 按星期且停用）、两份计划编辑页、一份已选两个应用的列表、一段含条件跳过与手动解锁兜底的日志。渲染时固定 `dynamicColor = false`，确保截图呈现上面这套青蓝配色而不受布局库取色影响。
+
 对应文件：
 
 ```
