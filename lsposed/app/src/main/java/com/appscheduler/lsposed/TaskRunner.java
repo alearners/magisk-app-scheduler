@@ -10,14 +10,16 @@ import android.text.TextUtils;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 /**
- * 核心流程（与 Magisk 版 run_app.sh 等价，通过 su 执行）：
- * force-stop → 判断锁屏 → 唤醒 → 广播让 LSPosed 钩子收起 Keyguard
- * → wm dismiss-keyguard → 上滑 + 密码 → 校验 → 启动 App。
- * 自动解锁失败且开启兜底时，会等用户手动解锁后再启动。
+ * 核心执行流程（与 Magisk 版 run_app.sh 等价，全部经 su 执行）：
+ * 校验包 → 判断锁屏 → 唤醒 → 广播让 LSPosed 钩子收起 Keyguard
+ * → wm dismiss-keyguard → 上滑 + 密码 → 校验 → 逐个启动计划里的 App。
+ * 一个计划可以包含多个 App，解锁只做一次；自动解锁失败且开启兜底时，会等用户手动解锁。
  */
 public class TaskRunner {
 
@@ -34,141 +36,170 @@ public class TaskRunner {
         String out = "";
     }
 
-    public static String run(Context context) {
+    /**
+     * 执行一个计划。
+     *
+     * @return 是否全部 App 都启动成功
+     */
+    public static boolean run(Context context, List<String> packages) {
         StringBuilder log = new StringBuilder();
         Config config = Config.get(context);
-        String pkg = config.pkg();
         String stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA).format(new Date());
-        log.append("=== 开始执行 ").append(stamp).append("（目标 ").append(pkg).append("） ===\n");
 
-        if (TextUtils.isEmpty(pkg) || pkg.contains("example")) {
-            log.append("目标包名未配置，请在界面中填写 APP_PKG\n");
+        if (packages == null || packages.isEmpty()) {
+            log.append("=== 开始执行 ").append(stamp).append(" ===\n");
+            log.append("计划里没有选择任何应用\n");
             return finish(context, log, true);
         }
+
+        log.append("=== 开始执行 ").append(stamp).append("（目标 ")
+                .append(TextUtils.join(", ", packages)).append("） ===\n");
 
         if (!suAvailable()) {
             log.append("未获得 root（su 不可用），无法执行\n");
             return finish(context, log, true);
         }
 
-        // 1. 包是否安装
-        Result listed = su("pm list packages " + pkg);
-        if (!listed.out.contains("package:" + pkg)) {
-            log.append("未找到已安装的包: ").append(pkg).append('\n');
+        // 1. 校验安装并强制停止
+        List<String> runnable = new ArrayList<>();
+        for (String pkg : packages) {
+            if (TextUtils.isEmpty(pkg)) {
+                continue;
+            }
+            Result listed = su("pm list packages " + pkg);
+            if (!listed.out.contains("package:" + pkg)) {
+                log.append("未找到已安装的包: ").append(pkg).append('\n');
+                continue;
+            }
+            su("am force-stop " + pkg);
+            log.append("已强制停止 ").append(pkg).append('\n');
+            runnable.add(pkg);
+        }
+        if (runnable.isEmpty()) {
+            log.append("没有任何可启动的包，放弃本次任务\n");
             return finish(context, log, true);
         }
 
-        // 2. 强制停止
-        su("am force-stop " + pkg);
-        log.append("已强制停止 ").append(pkg).append('\n');
-
-        // 3. 锁屏处理
-        boolean locked = isLocked();
-        log.append("锁屏状态: ").append(locked).append('\n');
-        if (locked) {
-            su("input keyevent 224");
-            sleep(800);
-            log.append("已唤醒屏幕\n");
-
-            // 3.1 交给 SystemUI 内的钩子直接收起 Keyguard
-            try {
-                Intent intent = new Intent(ACTION_DISMISS);
-                intent.setPackage(SYSTEMUI_PKG);
-                context.sendBroadcast(intent);
-                log.append("已发送收起锁屏广播\n");
-            } catch (Throwable t) {
-                log.append("发送广播失败: ").append(t).append('\n');
+        // 2. 锁屏处理（整个计划只做一次）
+        if (isLocked()) {
+            log.append("锁屏状态: true\n");
+            if (!unlock(context, config, log)) {
+                return finish(context, log, true);
             }
-            sleep(1500);
-            locked = isLocked();
-            log.append("广播后锁屏状态: ").append(locked).append('\n');
-
-            // 3.2 系统命令兜底
-            if (locked) {
-                su("wm dismiss-keyguard");
-                sleep(1200);
-                locked = isLocked();
-                log.append("wm dismiss-keyguard 后锁屏状态: ").append(locked).append('\n');
-            }
-
-            // 3.3 上滑 + 密码兜底
-            if (locked) {
-                int[] size = screenSize();
-                int startX = size[0] / 2;
-                int startY = size[1] * SLIDE_START_PERCENT / 100;
-                int endY = size[1] * SLIDE_END_PERCENT / 100;
-                log.append("屏幕 ").append(size[0]).append('x').append(size[1])
-                        .append("，上滑 (").append(startX).append(',').append(startY)
-                        .append(") -> (").append(startX).append(',').append(endY).append(")\n");
-                su("input swipe " + startX + " " + startY + " " + startX + " " + endY + " " + SLIDE_DURATION_MS);
-                sleep(1000);
-                String pwd = config.password();
-                if (!TextUtils.isEmpty(pwd)) {
-                    su("input text " + pwd);
-                    sleep(800);
-                    su("input keyevent 66");
-                    sleep(1500);
-                }
-                locked = isLocked();
-                log.append("密码注入后锁屏状态: ").append(locked).append('\n');
-            }
-
-            if (locked) {
-                log.append("自动解锁失败，keyguard 仍然显示\n");
-                if (!config.manualFallback()) {
-                    log.append("未开启手动解锁兜底，放弃本次任务\n");
-                    return finish(context, log, true);
-                }
-                int waitSec = config.manualWait();
-                log.append("已启用手动解锁兜底：最多等待 ").append(waitSec)
-                        .append(" 秒，用户解锁后立即启动\n");
-                notifyManualUnlock(context, waitSec);
-
-                boolean unlocked = false;
-                long deadline = System.currentTimeMillis() + waitSec * 1000L;
-                while (System.currentTimeMillis() < deadline) {
-                    sleep(3000);
-                    if (!isLocked()) {
-                        unlocked = true;
-                        break;
-                    }
-                }
-                if (!unlocked) {
-                    log.append("等待手动解锁超时（").append(waitSec).append(" 秒），放弃本次任务\n");
-                    return finish(context, log, true);
-                }
-                log.append("检测到用户已手动解锁，继续启动 App\n");
-                sleep(1200);
-            }
-        }
-
-        // 4. 启动 App
-        Result monkey = su("monkey -p " + pkg + " -c android.intent.category.LAUNCHER 1");
-        boolean ok = monkey.code == 0;
-        if (ok) {
-            log.append("已通过 monkey 启动\n");
         } else {
-            String activity = resolveLauncherActivity(pkg);
-            if (activity != null) {
-                Result start = su("am start -n " + activity);
-                ok = start.code == 0;
-                log.append(ok ? ("已通过 am start 启动: " + activity + "\n")
-                        : ("am start 失败: " + activity + "\n"));
-            } else {
-                log.append("无法解析启动 Activity，启动失败\n");
-            }
+            log.append("锁屏状态: false，直接启动\n");
         }
 
-        return finish(context, log, !ok);
+        // 3. 逐个启动：monkey → 解析 Activity 后 am start
+        boolean allOk = true;
+        for (String pkg : runnable) {
+            boolean ok = false;
+            Result monkey = su("monkey -p " + pkg + " -c android.intent.category.LAUNCHER 1");
+            ok = monkey.code == 0;
+            if (ok) {
+                log.append("已通过 monkey 启动 ").append(pkg).append('\n');
+            } else {
+                String resolved = resolveLauncherActivity(pkg);
+                if (resolved != null) {
+                    Result start = su("am start -n " + resolved);
+                    ok = start.code == 0;
+                    log.append(ok ? ("已通过 am start 启动 " + resolved + "\n")
+                            : ("am start 失败: " + resolved + "\n"));
+                } else {
+                    log.append("无法解析启动 Activity: ").append(pkg).append('\n');
+                }
+            }
+            if (!ok) {
+                allOk = false;
+            }
+            sleep(600);
+        }
+
+        return finish(context, log, !allOk);
     }
 
-    private static String finish(Context context, StringBuilder log, boolean failed) {
+    /** @return 解锁是否成功 */
+    private static boolean unlock(Context context, Config config, StringBuilder log) {
+        su("input keyevent 224");
+        sleep(800);
+        log.append("已唤醒屏幕\n");
+
+        // 1. 交给 SystemUI 内的钩子直接收起 Keyguard
+        try {
+            Intent intent = new Intent(ACTION_DISMISS);
+            intent.setPackage(SYSTEMUI_PKG);
+            context.sendBroadcast(intent);
+            log.append("已发送收起锁屏广播\n");
+        } catch (Throwable t) {
+            log.append("发送广播失败: ").append(t).append('\n');
+        }
+        sleep(1500);
+        if (!isLocked()) {
+            log.append("钩子收起锁屏成功\n");
+            return true;
+        }
+
+        // 2. 系统命令兜底
+        su("wm dismiss-keyguard");
+        sleep(1200);
+        if (!isLocked()) {
+            log.append("wm dismiss-keyguard 收起锁屏成功\n");
+            return true;
+        }
+
+        // 3. 上滑 + 密码兜底
+        int[] size = screenSize();
+        int startX = size[0] / 2;
+        int startY = size[1] * SLIDE_START_PERCENT / 100;
+        int endY = size[1] * SLIDE_END_PERCENT / 100;
+        log.append("屏幕 ").append(size[0]).append('x').append(size[1])
+                .append("，上滑 (").append(startX).append(',').append(startY)
+                .append(") -> (").append(startX).append(',').append(endY).append(")\n");
+        su("input swipe " + startX + " " + startY + " " + startX + " " + endY + " " + SLIDE_DURATION_MS);
+        sleep(1000);
+        String pwd = config.password();
+        if (!TextUtils.isEmpty(pwd)) {
+            su("input text " + pwd);
+            sleep(800);
+            su("input keyevent 66");
+            sleep(1500);
+        }
+        if (!isLocked()) {
+            log.append("密码注入后已解锁\n");
+            return true;
+        }
+
+        // 4. 手动解锁兜底
+        log.append("自动解锁失败，keyguard 仍然显示\n");
+        if (!config.manualFallback()) {
+            log.append("未开启手动解锁兜底，放弃本次任务\n");
+            return false;
+        }
+        int waitSec = config.manualWait();
+        log.append("已启用手动解锁兜底：最多等待 ").append(waitSec)
+                .append(" 秒，用户解锁后立即启动\n");
+        notifyManualUnlock(context, waitSec);
+
+        long deadline = System.currentTimeMillis() + waitSec * 1000L;
+        while (System.currentTimeMillis() < deadline) {
+            sleep(3000);
+            if (!isLocked()) {
+                log.append("检测到用户已手动解锁，继续启动 App\n");
+                sleep(1200);
+                return true;
+            }
+        }
+        log.append("等待手动解锁超时（").append(waitSec).append(" 秒），放弃本次任务\n");
+        return false;
+    }
+
+    private static boolean finish(Context context, StringBuilder log, boolean failed) {
         String text = log.toString();
         LogStore.append(context, text);
         if (failed) {
             notifyFailure(context, text);
         }
-        return text;
+        return !failed;
     }
 
     private static boolean suAvailable() {
@@ -276,7 +307,8 @@ public class TaskRunner {
             NotificationChannel channel = new NotificationChannel(
                     "scheduler", "定时启动 App", NotificationManager.IMPORTANCE_DEFAULT);
             nm.createNotificationChannel(channel);
-            String last = text.split("\n")[text.split("\n").length - 1];
+            String[] lines = text.split("\n");
+            String last = lines.length > 0 ? lines[lines.length - 1] : "执行失败";
             Notification.Builder builder = new Notification.Builder(context, "scheduler")
                     .setSmallIcon(android.R.drawable.ic_dialog_alert)
                     .setContentTitle("定时启动 App 执行失败")

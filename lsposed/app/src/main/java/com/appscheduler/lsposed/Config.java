@@ -89,4 +89,16 @@ public class Config {
                 .putInt(KEY_MANUAL_WAIT, manualWait)
                 .apply();
     }
+
+    /**
+     * 全局设置：调度总开关、锁屏密码、手动解锁兜底。计划本身存在 TaskStore 里。
+     */
+    public void saveGlobal(boolean enabled, String password, boolean manualFallback, int manualWait) {
+        sp.edit()
+                .putBoolean(KEY_ENABLED, enabled)
+                .putString(KEY_PASSWORD, password == null ? "" : password.trim())
+                .putBoolean(KEY_MANUAL_FALLBACK, manualFallback)
+                .putInt(KEY_MANUAL_WAIT, manualWait)
+                .apply();
+    }
 }

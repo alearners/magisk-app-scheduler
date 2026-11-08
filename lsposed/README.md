@@ -5,41 +5,63 @@
 | 对比项 | Magisk 版（`main`） | LSPosed 版（`lsposed`） |
 | --- | --- | --- |
 | 形态 | Magisk 模块 ZIP（纯 shell） | APK（Xposed 模块） |
-| 调度 | BusyBox `crond` + crontab | `AlarmManager`（`setExactAndAllowWhileIdle`） |
+| 调度 | BusyBox `crond` + crontab | `AlarmManager`（每个计划一个闹钟） |
+| 应用数量 | 一个固定包名 | **一个计划可同时启动多个 App** |
+| 定时方式 | crontab 表达式 | **按时间点 / 按星期 / 按间隔循环** |
+| 启动条件 | 无 | **仅充电 / 仅 WiFi / 仅屏幕熄灭** |
 | 解锁 | `wm dismiss-keyguard` → 上滑 + `input text` | **SystemUI 内钩子收起 Keyguard** → `wm` → 上滑 + `input text` |
 | 执行权限 | 模块脚本天然 root | App 内 `su -c` |
-| 配置 | 编辑 `config.sh` | App 界面（包名 / 密码 / 时间点 / 开关） |
+| 配置 | 编辑 `config.sh` | App 界面（应用选择器 / 计划编辑 / 条件开关） |
+
+## 功能
+
+- **应用选择器**：读取已安装的可启动应用（名称 + 包名），搜索、多选，无需手输包名。
+- **多 App 同时启动**：一个计划里可选多个应用，按顺序 `force-stop` 后逐个启动。
+- **多计划**：可建任意多个计划，各自独立的定时、次数、条件、启用状态。
+- **三种定时方式**：
+  - 按时间点：每天多个 `HH:MM`（如 08:00、20:00）；
+  - 按星期：勾选周一～周日（不勾＝每天）+ 一个时间点；
+  - 按间隔循环：每 N 分钟（含 30 分钟 / 1 小时 / 2 小时 / 6 小时 / 12 小时 / 24 小时快捷项）。
+- **循环次数**：填 0 表示不限；大于 0 时每跑一次减一，跑完自动停用计划。
+- **启动条件**：仅充电时 / 仅连 WiFi / 仅屏幕熄灭，任一不满足则跳过本次并写日志。
+- **手动解锁兜底**：自动解锁失败时不放弃，等用户自己解锁后自动继续启动。
+- **运行日志**：记录触发、条件跳过、解锁路径与启动结果，可一键清空。
 
 ## 界面（Kotlin + Jetpack Compose）
 
-界面不再用 Java 手工搭控件，改成 **Kotlin 2.0.21 + Jetpack Compose（Material3，Compose BOM 2024.09.03）**，单屏四块卡片：
+**Kotlin 2.0.21 + Jetpack Compose（Material3，Compose BOM 2024.09.03）**，四个页面：
 
-| 区域 | 内容 |
+| 页面 | 内容 |
 | --- | --- |
-| 顶部栏 | 标题「定时启动 App」+ 副标题说明 LSPosed 版复用 Magisk 版流程 |
-| 状态卡 | 启用状态、下次执行时间（`MM-dd HH:mm`）、执行中的「运行中」标记 |
-| 配置卡 | 目标包名、执行时间点、锁屏密码三个输入框 + 「启用定时任务」开关 + 「等用户手动解锁后再启动」开关（打开后出现「最长等待秒数」输入框） |
-| 操作行 | 「保存并应用」（写入配置并重排闹钟）、「立即执行一次」（后台线程跑 `TaskRunner`，按钮转圈） |
-| 日志卡 | 等宽字体只读日志 + 「刷新」「清空」，可直接长按复制 |
+| 计划列表 | 调度总开关 + 下次执行时间；每个计划一张卡片（应用、计划描述、条件、上次结果、启用开关、编辑/删除/立即执行）；全局设置卡（锁屏密码、手动解锁兜底开关与最长等待秒数） |
+| 计划编辑 | 已选应用标签（点一下移除）+「选择应用」；触发方式三选一；循环次数；三个启动条件开关；「保存计划」 |
+| 应用选择 | 搜索框 + 已安装应用列表（复选框多选），底部「完成（已选 N）」 |
+| 运行日志 | 等宽字体只读日志 + 刷新 / 清空 |
 
-配色与布局参考开源项目 **Sesame-AG** 的 Compose 主题：主色 `#1FA0CC`（青蓝）、主色容器 `#BBEAFF`、次色 `#4C616B`、背景/表面 `#F5FAFD`、错误色 `#BA1A1A`，卡片圆角 20dp；同时提供对应的深色方案，Android 12 及以上启用系统动态取色（`dynamicLightColorScheme` / `dynamicDarkColorScheme`）。只借鉴设计风格，未引入其任何业务代码。
+配色与布局参考开源项目 **Sesame-AG** 的 Compose 主题：主色 `#1FA0CC`（青蓝）、主色容器 `#BBEAFF`、次色 `#4C616B`、背景/表面 `#F5FAFD`、错误色 `#BA1A1A`，卡片圆角 20dp；另有深色方案，Android 12 及以上启用系统动态取色。只借鉴设计风格，未引入其任何业务代码。
 
 对应文件：
 
 ```
-app/src/main/java/com/appscheduler/lsposed/MainActivity.kt   # ComponentActivity + setContent + enableEdgeToEdge
-app/src/main/java/com/appscheduler/lsposed/ui/Theme.kt        # Material3 配色 / 深色 / 动态取色
-app/src/main/java/com/appscheduler/lsposed/ui/MainScreen.kt   # 状态卡 / 配置卡 / 操作行 / 日志卡
+ui/MainScreen.kt        # 四屏导航（列表 / 编辑 / 选应用 / 日志）
+ui/TaskListScreen.kt    # 计划列表 + 全局设置
+ui/TaskEditScreen.kt    # 计划编辑（定时方式 / 次数 / 条件）
+ui/AppPickerScreen.kt    # 已安装应用搜索与多选
+ui/LogScreen.kt         # 日志
+ui/Common.kt            # ScreenHeader / SectionCard / ChoiceChip / SwitchRow
+ui/Theme.kt             # Material3 配色 / 深色 / 动态取色
 ```
 
-Java 侧只保留调度、执行与钩子（`Scheduler` / `TaskRunner` / `XposedEntry` 等），这样注入 SystemUI 的钩子不依赖 Kotlin 运行时，界面则完全用 Compose 编写。
+Java 侧只保留执行与钩子（`TaskRunner` / `XposedEntry` / `Config` / `LogStore`），注入 SystemUI 的钩子不依赖 Kotlin 运行时；调度、数据与界面均为 Kotlin。
 
 ## 工作原理
 
-1. **调度**：`Scheduler` 解析界面里配置的时间点（`HH:MM` 逗号分隔），取最近一个时间点用 `AlarmManager` 精确定时；`AlarmReceiver` 触发后执行一次任务并排下一次；`BootReceiver` 开机重排。
-2. **执行**：`TaskRunner` 通过 `su -c` 依次执行 `pm list packages` 校验、`am force-stop`、锁屏判断、`input keyevent 224` 唤醒、广播收起锁屏、`wm dismiss-keyguard`、上滑 + `input text` + 回车、`am start` / `monkey` 启动。
-3. **手动解锁兜底**：自动解锁仍失败且开关打开时，发通知提示「请手动解锁」，每 3 秒轮询一次锁屏状态，最多等界面里配置的秒数；检测到已解锁就继续启动 App，超时则记失败并发通知。行为与 Magisk 版 `MANUAL_UNLOCK_FALLBACK` 一致。
-4. **钩子**：`XposedEntry` 只作用于 `com.android.systemui`：
+1. **数据**：每个计划是一个 `TaskItem`（应用列表、定时方式、星期、时间点、间隔、次数、条件、启用），整表以 JSON 存在 `SharedPreferences`（`TaskStore`）。
+2. **调度**：`Scheduler` 为每个计划单独排一个 `PendingIntent`（请求码按计划 id 区分），用 `setExactAndAllowWhileIdle`；无精确闹钟权限时降级 `setAndAllowWhileIdle`；`BootReceiver` 开机重排。
+3. **条件**：`AlarmReceiver` 触发时先过 `ConditionChecker`（充电 / WiFi / 屏幕熄灭），不满足则记日志并直接排下一次。
+4. **执行**：`TaskRunner` 通过 `su -c` 依次执行 `pm list packages` 校验、`am force-stop`、锁屏判断、`input keyevent 224` 唤醒、广播收起锁屏、`wm dismiss-keyguard`、上滑 + `input text` + 回车，然后对每个应用 `monkey` → 解析 Activity 后 `am start`。解锁只做一次，整个计划共享。
+5. **手动解锁兜底**：自动解锁仍失败且开关打开时，发通知提示「请手动解锁」，每 3 秒轮询锁屏状态，最多等配置秒数；检测到已解锁就继续，超时才放弃。
+6. **钩子**：`XposedEntry` 只作用于 `com.android.systemui`：
    - 挂钩 `Application.onCreate`，在其中注册 `com.appscheduler.action.DISMISS_KEYGUARD` 广播接收器；
    - 挂钩 `com.android.systemui.keyguard.KeyguardViewMediator` 的构造函数捕获实例；
    - 收到广播后按候选方法列表反射调用：`dismissKeyguard()` → `handleHideKeyguard(boolean)` → `handleHideKeyguard(boolean, boolean)` → `setShowingLocked(false, true)` → `hideKeyguard()`，逐个尝试并在 LSPosed 日志中记录结果。
@@ -53,7 +75,7 @@ Java 侧只保留调度、执行与钩子（`Scheduler` / `TaskRunner` / `Xposed
 git push origin lsposed
 
 # 或者打标签发布 Release
-git tag lsposed-v1.4 && git push origin lsposed-v1.4
+git tag lsposed-v1.5 && git push origin lsposed-v1.5
 ```
 
 本地等价命令（需要本机 Android SDK）：
@@ -64,11 +86,12 @@ gradle -p lsposed :app:assembleRelease
 
 ## 安装
 
-1. 下载 `app-scheduler-lsposed-v1.4.apk`；
+1. 下载 `app-scheduler-lsposed-v1.5.apk`；
 2. 正常安装（授予 root 权限提示时允许）；
 3. LSPosed 管理器 → 模块 → 启用「定时启动 App · LSPosed」→ 勾选作用域 **System UI**（`com.android.systemui`）；
 4. 重启手机（或重启 SystemUI）；
-5. 打开 App 填写包名、密码、时间点，勾选「启用定时任务」→ 保存并应用。
+5. 打开 App：填锁屏密码 → 点「新建启动计划」→ 选择应用 → 选触发方式与条件 → 保存；
+6. 回到列表打开「调度总开关」并保存全局设置。
 
 ## 验证钩子是否生效
 

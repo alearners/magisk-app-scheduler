@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
         android:allowBackup="false"
@@ -24,11 +26,11 @@
         </activity>
 
         <receiver
-            android:name=".AlarmReceiver"
+            android:name=".schedule.AlarmReceiver"
             android:exported="false" />
 
         <receiver
-            android:name=".BootReceiver"
+            android:name=".schedule.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
