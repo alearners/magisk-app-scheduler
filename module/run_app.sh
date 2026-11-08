@@ -6,6 +6,7 @@
 #  执行流程：
 #    日志轮转 → 单实例锁 → 强制停止 App → 判断锁屏
 #    → 锁屏则唤醒并自动解锁 → 二次确认 → 启动 App
+#    （自动解锁失败时，可等待用户手动解锁后再自动启动，见 config.sh 的 MANUAL_UNLOCK_*）
 # ============================================================
 
 export PATH=/data/adb/magisk:/system/bin:/system/xbin:/sbin:/vendor/bin:/product/bin
@@ -40,6 +41,10 @@ WAIT_BEFORE_LAUNCH=${WAIT_BEFORE_LAUNCH:-1}
 ENABLE_NOTIFY=${ENABLE_NOTIFY:-0}
 NOTIFY_TITLE=${NOTIFY_TITLE:-定时启动 App}
 NOTIFY_TAG=${NOTIFY_TAG:-app_scheduler}
+# 自动解锁失败后：1=等待用户手动解锁，解锁后立即启动；0=直接放弃
+MANUAL_UNLOCK_FALLBACK=${MANUAL_UNLOCK_FALLBACK:-1}
+MANUAL_UNLOCK_WAIT=${MANUAL_UNLOCK_WAIT:-180}
+MANUAL_UNLOCK_POLL=${MANUAL_UNLOCK_POLL:-3}
 
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null
 
@@ -193,10 +198,37 @@ if [ "$IS_LOCKED" = "true" ]; then
     # 二次检查是否解锁成功
     KEYGUARD_AFTER=$(get_keyguard)
     if is_locked "$KEYGUARD_AFTER"; then
-        log "解锁失败，keyguard 仍然显示: $KEYGUARD_AFTER"
-        log "=== 执行终止（未启动 $APP_NAME） ==="
-        notify "$APP_NAME 未能启动：自动解锁失败"
-        exit 1
+        log "自动解锁失败，keyguard 仍然显示: $KEYGUARD_AFTER"
+
+        if [ "$MANUAL_UNLOCK_FALLBACK" = "1" ]; then
+            # 兜底：等用户自己解锁，解锁后立即启动 App
+            log "已启用手动解锁兜底：最多等待 ${MANUAL_UNLOCK_WAIT} 秒，用户解锁后立即启动 $APP_NAME"
+            notify "$APP_NAME：请手动解锁，解锁后会自动启动"
+            MANUAL_UNLOCKED=false
+            WAITED=0
+            while [ "$WAITED" -lt "$MANUAL_UNLOCK_WAIT" ]; do
+                sleep "$MANUAL_UNLOCK_POLL"
+                WAITED=$((WAITED + MANUAL_UNLOCK_POLL))
+                if ! is_locked "$(get_keyguard)"; then
+                    MANUAL_UNLOCKED=true
+                    log "检测到用户已手动解锁（等待 ${WAITED} 秒），继续启动 $APP_NAME"
+                    break
+                fi
+            done
+
+            if [ "$MANUAL_UNLOCKED" != "true" ]; then
+                log "等待手动解锁超时（${MANUAL_UNLOCK_WAIT} 秒），放弃本次任务"
+                log "=== 执行终止（未启动 $APP_NAME） ==="
+                notify "$APP_NAME 未能启动：等待手动解锁超时"
+                exit 1
+            fi
+            sleep "$WAIT_BEFORE_LAUNCH"
+        else
+            log "未开启手动解锁兜底（MANUAL_UNLOCK_FALLBACK=0），直接放弃"
+            log "=== 执行终止（未启动 $APP_NAME） ==="
+            notify "$APP_NAME 未能启动：自动解锁失败"
+            exit 1
+        fi
     else
         log "解锁成功"
     fi

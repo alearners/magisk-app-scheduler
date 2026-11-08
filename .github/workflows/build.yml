@@ -77,6 +77,9 @@ jobs:
             sh -n "$f"
           done
 
+      - name: Run stub tests (run_app.sh branches)
+        run: bash tests/run_app_stub_test.sh "$GITHUB_WORKSPACE"
+
       - name: Build ZIP
         run: |
           set -euo pipefail
