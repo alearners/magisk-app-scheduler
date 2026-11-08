@@ -17,6 +17,7 @@ import java.util.Locale;
  * 核心流程（与 Magisk 版 run_app.sh 等价，通过 su 执行）：
  * force-stop → 判断锁屏 → 唤醒 → 广播让 LSPosed 钩子收起 Keyguard
  * → wm dismiss-keyguard → 上滑 + 密码 → 校验 → 启动 App。
+ * 自动解锁失败且开启兜底时，会等用户手动解锁后再启动。
  */
 public class TaskRunner {
 
@@ -113,8 +114,31 @@ public class TaskRunner {
             }
 
             if (locked) {
-                log.append("解锁失败，未启动 App（可检查 LSPosed 模块是否已启用并勾选 SystemUI 作用域）\n");
-                return finish(context, log, true);
+                log.append("自动解锁失败，keyguard 仍然显示\n");
+                if (!config.manualFallback()) {
+                    log.append("未开启手动解锁兜底，放弃本次任务\n");
+                    return finish(context, log, true);
+                }
+                int waitSec = config.manualWait();
+                log.append("已启用手动解锁兜底：最多等待 ").append(waitSec)
+                        .append(" 秒，用户解锁后立即启动\n");
+                notifyManualUnlock(context, waitSec);
+
+                boolean unlocked = false;
+                long deadline = System.currentTimeMillis() + waitSec * 1000L;
+                while (System.currentTimeMillis() < deadline) {
+                    sleep(3000);
+                    if (!isLocked()) {
+                        unlocked = true;
+                        break;
+                    }
+                }
+                if (!unlocked) {
+                    log.append("等待手动解锁超时（").append(waitSec).append(" 秒），放弃本次任务\n");
+                    return finish(context, log, true);
+                }
+                log.append("检测到用户已手动解锁，继续启动 App\n");
+                sleep(1200);
             }
         }
 
@@ -220,6 +244,26 @@ public class TaskRunner {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    private static void notifyManualUnlock(Context context, int waitSec) {
+        try {
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) {
+                return;
+            }
+            NotificationChannel channel = new NotificationChannel(
+                    "scheduler", "定时启动 App", NotificationManager.IMPORTANCE_HIGH);
+            nm.createNotificationChannel(channel);
+            Notification.Builder builder = new Notification.Builder(context, "scheduler")
+                    .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+                    .setContentTitle("请手动解锁")
+                    .setContentText("解锁后将在 " + waitSec + " 秒内自动启动 App")
+                    .setAutoCancel(true);
+            nm.notify(2002, builder.build());
+        } catch (Throwable ignored) {
+            // 通知失败不影响主流程
         }
     }
 

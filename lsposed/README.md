@@ -18,7 +18,7 @@
 | --- | --- |
 | 顶部栏 | 标题「定时启动 App」+ 副标题说明 LSPosed 版复用 Magisk 版流程 |
 | 状态卡 | 启用状态、下次执行时间（`MM-dd HH:mm`）、执行中的「运行中」标记 |
-| 配置卡 | 目标包名、执行时间点、锁屏密码三个输入框 + 「启用定时任务」开关 |
+| 配置卡 | 目标包名、执行时间点、锁屏密码三个输入框 + 「启用定时任务」开关 + 「等用户手动解锁后再启动」开关（打开后出现「最长等待秒数」输入框） |
 | 操作行 | 「保存并应用」（写入配置并重排闹钟）、「立即执行一次」（后台线程跑 `TaskRunner`，按钮转圈） |
 | 日志卡 | 等宽字体只读日志 + 「刷新」「清空」，可直接长按复制 |
 
@@ -38,7 +38,8 @@ Java 侧只保留调度、执行与钩子（`Scheduler` / `TaskRunner` / `Xposed
 
 1. **调度**：`Scheduler` 解析界面里配置的时间点（`HH:MM` 逗号分隔），取最近一个时间点用 `AlarmManager` 精确定时；`AlarmReceiver` 触发后执行一次任务并排下一次；`BootReceiver` 开机重排。
 2. **执行**：`TaskRunner` 通过 `su -c` 依次执行 `pm list packages` 校验、`am force-stop`、锁屏判断、`input keyevent 224` 唤醒、广播收起锁屏、`wm dismiss-keyguard`、上滑 + `input text` + 回车、`am start` / `monkey` 启动。
-3. **钩子**：`XposedEntry` 只作用于 `com.android.systemui`：
+3. **手动解锁兜底**：自动解锁仍失败且开关打开时，发通知提示「请手动解锁」，每 3 秒轮询一次锁屏状态，最多等界面里配置的秒数；检测到已解锁就继续启动 App，超时则记失败并发通知。行为与 Magisk 版 `MANUAL_UNLOCK_FALLBACK` 一致。
+4. **钩子**：`XposedEntry` 只作用于 `com.android.systemui`：
    - 挂钩 `Application.onCreate`，在其中注册 `com.appscheduler.action.DISMISS_KEYGUARD` 广播接收器；
    - 挂钩 `com.android.systemui.keyguard.KeyguardViewMediator` 的构造函数捕获实例；
    - 收到广播后按候选方法列表反射调用：`dismissKeyguard()` → `handleHideKeyguard(boolean)` → `handleHideKeyguard(boolean, boolean)` → `setShowingLocked(false, true)` → `hideKeyguard()`，逐个尝试并在 LSPosed 日志中记录结果。

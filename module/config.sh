@@ -43,6 +43,15 @@ WAIT_BEFORE_LAUNCH=1
 # service.sh 等待 sys.boot_completed=1 之后再额外等待的秒数
 WAIT_BOOT_EXTRA=5
 
+# ==================== 自动解锁失败后的兜底 ====================
+# 1=自动解锁失败时转为等待用户手动解锁，用户解锁后立即启动 App
+# 0=直接放弃本次任务（旧行为）
+MANUAL_UNLOCK_FALLBACK=1
+# 等待手动解锁的最长秒数，超时则放弃本次任务
+MANUAL_UNLOCK_WAIT=180
+# 等待期间的轮询间隔（秒）
+MANUAL_UNLOCK_POLL=3
+
 # ==================== 日志参数 ====================
 LOG_FILE="/data/local/tmp/app_scheduler.log"
 # 单个日志文件大小上限（字节），默认 1MB

@@ -17,10 +17,13 @@
 4. `am force-stop` 强制停止目标 App；
 5. 检测设备是否锁屏（`dumpsys window policy`）；
 6. 若锁屏：唤醒屏幕 → `wm dismiss-keyguard` 尝试直接收起锁屏 → 未解锁则按分辨率比例上滑调出密码盘 → 输入密码 → 回车确认；
-7. 再次检测锁屏状态，若仍未解锁则记录失败、发通知并退出；
+7. 再次检测锁屏状态：
+   - 已解锁 → 继续；
+   - 仍锁屏且 `MANUAL_UNLOCK_FALLBACK=1` → 等待用户手动解锁（最长 `MANUAL_UNLOCK_WAIT` 秒），解锁后自动继续启动；
+   - 仍锁屏且兜底关闭，或等待超时 → 记录失败、发通知并退出；
 8. 若已解锁或原本未锁屏：按 `APP_ACTIVITY`（若配置）→ `monkey` → `am start` 的顺序启动 App。
 
-核心风险：HyperOS 2 的锁屏安全策略可能拒绝通过 `input text` 注入的密码。若系统拦截注入文本，自动解锁会失败，App 不会启动。该环节必须在真机上先行验证。
+核心风险：HyperOS 2 的锁屏安全策略可能拒绝通过 `input text` 注入的密码。若系统拦截注入文本，自动解锁会失败；此时默认转入手动解锁兜底，等你解锁后仍会启动 App。该环节必须在真机上先行验证。
 
 ---
 
@@ -126,15 +129,28 @@ dumpsys window policy | grep -i keyguard
 2. `wm dismiss-keyguard`：多数机型可直接收起锁屏，无需输入密码；
 3. 若仍锁屏：`wm size` 取分辨率（多段输出取最后一段，兼容 Override），按 `SLIDE_START_PERCENT` / `SLIDE_END_PERCENT` 计算上滑坐标，日志记录实际坐标；
 4. `input swipe` → `input text "$PASSWORD"` → `KEYCODE_ENTER`；
-5. 二次检查 Keyguard，若仍锁屏则记失败、发通知、退出（不启动 App）。
+5. 二次检查 Keyguard：
+   - 已解锁 → 继续启动；
+   - 仍锁屏且 `MANUAL_UNLOCK_FALLBACK=1` → 转入"手动解锁兜底"（见 4.7）；
+   - 仍锁屏且 `MANUAL_UNLOCK_FALLBACK=0` → 记失败、发通知、退出（不启动 App）。
 
-日志示例：
+### 4.7 手动解锁兜底
 
-```
-屏幕尺寸: 1080x2400, 比例: 80%->25%, 上滑: (540,1920) -> (540,600)
-```
+自动解锁失败时若不想直接放弃，可让脚本"等你自己解锁"：
 
-### 4.7 自动解锁风险
+1. 发一条通知提示「请手动解锁，解锁后会自动启动」；
+2. 按 `MANUAL_UNLOCK_POLL`（默认 3 秒）轮询 `get_keyguard`，最多等 `MANUAL_UNLOCK_WAIT`（默认 180 秒）；
+3. 轮询到未锁屏即视为用户已手动解锁，日志记录「检测到用户已手动解锁（等待 N 秒），继续启动 App」，随后走正常启动流程；
+4. 超时则记录「等待手动解锁超时」，发通知并退出。
+
+设计取舍：
+
+- 等待期不重复发通知，避免连续打扰；
+- 计时用累加秒数而非 `date` 差值，便于在桩测试里把 `sleep` 打桩后快速跑完；
+- 兜底默认开启（`1`），因为自动解锁受 ROM 限制较大；若希望严格"失败即退出"，改为 `0` 即可恢复旧行为；
+- 轮询只读 `dumpsys`，不重复唤醒或滑动，避免干扰用户正在进行的解锁动作。
+
+### 4.8 自动解锁风险
 
 HyperOS 2 可能拒绝 `input text` 注入的密码。真机验证步骤：
 
@@ -145,9 +161,9 @@ input text 0219
 input keyevent 66
 ```
 
-若密码被拒绝且 `wm dismiss-keyguard` 也无法收起锁屏，则本模块的自动解锁方案不可用，请改用 `lsposed` 分支（在 SystemUI 内用钩子收起 Keyguard，密码注入仅作兜底）。
+若密码被拒绝且 `wm dismiss-keyguard` 也无法收起锁屏：模块会转入手动解锁兜底（等你解锁后自动启动）；若连兜底也不想要，把 `MANUAL_UNLOCK_FALLBACK` 设为 `0`。仍长期失败则改用 `lsposed` 分支（在 SystemUI 内用钩子收起 Keyguard，密码注入仅作兜底）。
 
-### 4.8 启动 App
+### 4.9 启动 App
 
 按顺序尝试，任一成功即停止：
 
@@ -157,7 +173,7 @@ input keyevent 66
 
 启动前先 `pm list packages | grep -F "package:$APP_PKG"` 校验包已安装，避免拼错包名时静默失败。
 
-### 4.9 密码存储
+### 4.10 密码存储
 
 密码以明文写在 `config.sh`。任何 Root 权限进程均可读取，请自行评估风险。
 
@@ -241,9 +257,19 @@ su -c sh /data/adb/modules/app_scheduler/run_app.sh
 
 临时把 `LOG_MAX_SIZE` 改为 `1024`、`LOG_MAX_ROTATIONS` 改为 `2`，手动触发数次，确认 `.log.1`、`.log.2` 顺序正确，验证后改回。
 
-### 6.7 PC 侧桩测试（可选）
+### 6.7 PC 侧桩测试（`tests/run_app_stub_test.sh`）
 
-没有真机时可用 Git Bash 搭桩：为 `am`、`cmd`、`input`、`dumpsys`、`wm`、`pm`、`monkey`、`busybox` 各写一个桩脚本放入测试 `bin` 并加进 `PATH`，桩按环境变量返回不同输出并记录调用参数；仅把 `run_app.sh` 的 `export PATH=` 行与 `/data/local/tmp` 路径替换为测试目录，用 `sh run_app.sh` 显式调用（Git Bash 对无执行位文件无法直接执行），再断言调用序列与日志。
+仓库自带桩测试脚本，无需真机即可验证 `run_app.sh` 的分支逻辑：
+
+```bash
+bash tests/run_app_stub_test.sh "$(pwd)"
+```
+
+脚本会复制一份 `module/` 到临时目录，把 `am`、`cmd`、`input`、`dumpsys`、`wm`、`pm`、`monkey` 换成桩脚本并注入 `PATH`，同时把 `run_app.sh` 的 `export PATH=` 行与 `/data/local/tmp` 路径替换到临时目录（避免真实锁目录残留、也避免污染真机日志）。
+
+覆盖 9 个场景：`wm dismiss-keyguard` 直解、密码注入解锁、兜底关闭即退出、**用户手动解锁后自动启动**、**等待手动解锁超时**、未锁屏直启、包未安装退出、`monkey` 失败回退 `am start`、`APP_ACTIVITY` 优先。
+
+CI 的 `build.yml` 在打包前也会跑这套桩测试，断言失败即中断构建。
 
 ---
 
@@ -257,7 +283,7 @@ su -c sh /data/adb/modules/app_scheduler/run_app.sh
 | 依赖 Magisk BusyBox | 路径变化需调整 `service.sh` 的 `BUSYBOX` 检测链 |
 | 密码明文存储 | Root 环境均可读取 |
 | crond 启动有延迟 | 开机完成后额外等待 `WAIT_BOOT_EXTRA` 秒 |
-| 解锁失败不启动 App | 记录失败并发通知，避免误操作 |
+| 解锁失败不启动 App | 兜底关闭或等待超时时才退出，并记日志 + 发通知 |
 
 ---
 

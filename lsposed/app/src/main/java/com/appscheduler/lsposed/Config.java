@@ -14,10 +14,13 @@ public class Config {
     public static final String KEY_PASSWORD = "password";
     public static final String KEY_TIMES = "times";
     public static final String KEY_ENABLED = "enabled";
+    public static final String KEY_MANUAL_FALLBACK = "manual_fallback";
+    public static final String KEY_MANUAL_WAIT = "manual_wait";
 
     public static final String DEFAULT_PKG = "com.example.app";
     public static final String DEFAULT_PASSWORD = "0219";
     public static final String DEFAULT_TIMES = "08:00, 20:00";
+    public static final int DEFAULT_MANUAL_WAIT = 120;
 
     private final SharedPreferences sp;
 
@@ -45,12 +48,45 @@ public class Config {
         return sp.getBoolean(KEY_ENABLED, false);
     }
 
+    /**
+     * 自动解锁失败时，是否等待用户手动解锁（解锁后立即启动 App）。
+     */
+    public boolean manualFallback() {
+        return sp.getBoolean(KEY_MANUAL_FALLBACK, true);
+    }
+
+    /**
+     * 等待手动解锁的最长秒数。
+     */
+    public int manualWait() {
+        int value = sp.getInt(KEY_MANUAL_WAIT, DEFAULT_MANUAL_WAIT);
+        if (value < 10) {
+            value = 10;
+        }
+        if (value > 1800) {
+            value = 1800;
+        }
+        return value;
+    }
+
     public void save(String pkg, String password, String times, boolean enabled) {
         sp.edit()
                 .putString(KEY_PKG, pkg == null ? "" : pkg.trim())
                 .putString(KEY_PASSWORD, password == null ? "" : password.trim())
                 .putString(KEY_TIMES, times == null ? "" : times.trim())
                 .putBoolean(KEY_ENABLED, enabled)
+                .apply();
+    }
+
+    public void save(String pkg, String password, String times, boolean enabled,
+                     boolean manualFallback, int manualWait) {
+        sp.edit()
+                .putString(KEY_PKG, pkg == null ? "" : pkg.trim())
+                .putString(KEY_PASSWORD, password == null ? "" : password.trim())
+                .putString(KEY_TIMES, times == null ? "" : times.trim())
+                .putBoolean(KEY_ENABLED, enabled)
+                .putBoolean(KEY_MANUAL_FALLBACK, manualFallback)
+                .putInt(KEY_MANUAL_WAIT, manualWait)
                 .apply();
     }
 }

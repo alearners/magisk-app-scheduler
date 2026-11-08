@@ -80,6 +80,8 @@ fun MainScreen() {
     var password by remember { mutableStateOf(config.password()) }
     var times by remember { mutableStateOf(config.times()) }
     var enabled by remember { mutableStateOf(config.enabled()) }
+    var manualFallback by remember { mutableStateOf(config.manualFallback()) }
+    var manualWait by remember { mutableStateOf(config.manualWait().toString()) }
     var log by remember { mutableStateOf(LogStore.read(context)) }
     var running by remember { mutableStateOf(false) }
     var nextRun by remember {
@@ -87,7 +89,14 @@ fun MainScreen() {
     }
 
     fun saveAndApply() {
-        config.save(pkg, password, times, enabled)
+        config.save(
+            pkg,
+            password,
+            times,
+            enabled,
+            manualFallback,
+            manualWait.toIntOrNull() ?: Config.DEFAULT_MANUAL_WAIT
+        )
         Scheduler.scheduleNext(context)
         nextRun = if (Config.get(context).enabled()) Scheduler.describeNext(context) else "未启用"
         log = LogStore.read(context)
@@ -146,7 +155,11 @@ fun MainScreen() {
                 times = times,
                 onTimesChange = { times = it },
                 enabled = enabled,
-                onEnabledChange = { enabled = it }
+                onEnabledChange = { enabled = it },
+                manualFallback = manualFallback,
+                onManualFallbackChange = { manualFallback = it },
+                manualWait = manualWait,
+                onManualWaitChange = { manualWait = it }
             )
 
             Row(
@@ -248,7 +261,11 @@ private fun ConfigCard(
     times: String,
     onTimesChange: (String) -> Unit,
     enabled: Boolean,
-    onEnabledChange: (Boolean) -> Unit
+    onEnabledChange: (Boolean) -> Unit,
+    manualFallback: Boolean,
+    onManualFallbackChange: (Boolean) -> Unit,
+    manualWait: String,
+    onManualWaitChange: (String) -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -303,6 +320,31 @@ private fun ConfigCard(
                     )
                 }
                 Switch(checked = enabled, onCheckedChange = onEnabledChange)
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("等用户手动解锁后再启动", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "自动解锁失败时不放弃，等你解锁后自动打开 App",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = manualFallback, onCheckedChange = onManualFallbackChange)
+            }
+
+            if (manualFallback) {
+                OutlinedTextField(
+                    value = manualWait,
+                    onValueChange = onManualWaitChange,
+                    label = { Text("最长等待秒数") },
+                    supportingText = { Text("10–1800 秒，超时则放弃本次任务并发通知") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }

@@ -26,7 +26,8 @@
 - **定时调度**：`config.sh` 中 `SCHEDULE_CRON_LINES` 支持任意多行 crontab 表达式，`service.sh` 开机动态生成 crontab 并启动 BusyBox `crond`。
 - **强制重启**：先 `am force-stop`，再 `monkey` / `am start` 启动，失败自动降级。
 - **锁屏解锁**：优先 `wm dismiss-keyguard`（无需模拟滑动）；未解锁时按屏幕比例上滑 + 输入密码 + 回车，解锁后二次校验 Keyguard 状态。
-- **失败即退出**：解锁失败不会盲目启动 App，改发通知提醒。
+- **手动解锁兜底**：自动解锁失败时不放弃，改为等待用户自己解锁（默认最长 180 秒，可关）；一旦检测到解锁立即启动 App，超时才记失败并发通知。
+- **失败即退出**：兜底关闭或等待超时时不会盲目启动 App，改发通知提醒。
 - **日志轮转**：单文件超过 `LOG_MAX_SIZE`（默认 1 MB）自动轮转，保留份数由 `LOG_MAX_ROTATIONS` 控制。
 - **单实例锁**：上一轮未结束时本轮直接跳过，避免重叠执行。
 - **失败通知**：`cmd notification post` 发送系统通知。
@@ -40,7 +41,8 @@
 3. 新增可选 `APP_ACTIVITY`，可绕过 `monkey` 直接指定启动 Activity；
 4. 打包全部迁到 GitHub Actions（统一 LF、755 权限、ZIP 结构校验、sha256、Tag 自动发布）；
 5. 移除「蓝牙解锁方案」这一改进方向，解锁链只保留 `wm` + 上滑密码两条路径；
-6. 新增 `lsposed` 分支：Xposed 钩子替代密码注入的模块形态，界面用 Kotlin + Compose 重写。
+6. 新增 `lsposed` 分支：Xposed 钩子替代密码注入的模块形态，界面用 Kotlin + Compose 重写；
+7. 新增手动解锁兜底：自动解锁失败可等待用户解锁后自动启动（`MANUAL_UNLOCK_FALLBACK` / `MANUAL_UNLOCK_WAIT` / `MANUAL_UNLOCK_POLL`）。
 
 ---
 
@@ -61,6 +63,7 @@
 │   ├── customize.sh
 │   └── uninstall.sh
 ├── scripts/package.sh            # 本地打包（与 CI 等价，便于自查）
+├── tests/run_app_stub_test.sh    # 桩测试：无需真机验证 run_app.sh 分支
 ├── docs/DEVELOPMENT.md           # 开发文档
 └── lsposed/                      # 仅 lsposed 分支存在
 ```
@@ -106,6 +109,9 @@ su -c sh /data/adb/modules/app_scheduler/service.sh
 | `WAIT_AFTER_PASSWORD` | `2` | 输入密码并回车后等待解锁完成 |
 | `WAIT_BEFORE_LAUNCH` | `1` | 启动 App 前等待 |
 | `WAIT_BOOT_EXTRA` | `5` | 开机完成后额外等待 |
+| `MANUAL_UNLOCK_FALLBACK` | `1` | 自动解锁失败后是否等用户手动解锁再启动（`1` 开 / `0` 关） |
+| `MANUAL_UNLOCK_WAIT` | `180` | 等待手动解锁的最长秒数，超时放弃本次任务 |
+| `MANUAL_UNLOCK_POLL` | `3` | 等待期间的锁屏状态轮询间隔（秒） |
 | `LOG_FILE` | `/data/local/tmp/app_scheduler.log` | 日志路径 |
 | `LOG_MAX_SIZE` | `1048576` | 单份日志上限（字节） |
 | `LOG_MAX_ROTATIONS` | `1` | 保留旧日志份数，`0` 表示不留 |
@@ -150,7 +156,7 @@ ls -l /data/local/tmp/app_scheduler.log*
 dumpsys window policy | grep -i keyguard
 ```
 
-日志中出现 `解锁失败，keyguard 仍然显示` 说明密码注入被系统拦截：先确认 `wm dismiss-keyguard` 是否可用，仍不行则改用 `lsposed` 分支的钩子方案。
+日志中出现 `自动解锁失败，keyguard 仍然显示` 说明密码注入被系统拦截：默认已开启手动解锁兜底，你手动解锁后 App 会自动启动；若要恢复"失败即退出"的旧行为，把 `MANUAL_UNLOCK_FALLBACK` 设为 `0`。长期失败则改用 `lsposed` 分支的钩子方案。
 
 ---
 
@@ -186,7 +192,7 @@ sh scripts/package.sh          # 生成 build/app_scheduler-v1.4.zip，与 CI �
 
 | 版本 | versionCode | 变更 |
 | --- | --- | --- |
-| v1.4 | 5 | `action.sh`、`wm dismiss-keyguard` 前置解锁、`APP_ACTIVITY`、GitHub Actions 打包、移除蓝牙解锁方向、新增 lsposed 分支 |
+| v1.4 | 5 | `action.sh`、`wm dismiss-keyguard` 前置解锁、`APP_ACTIVITY`、手动解锁兜底、GitHub Actions 打包、移除蓝牙解锁方向、新增 lsposed 分支 |
 | v1.3 | 4 | 参数集中到 `config.sh`、多时间点调度、日志轮转份数可配置、`customize.sh` |
 | v1.2 | 3 | 失败通知、单实例锁、坐标自适应 |
 | v1.1 | 2 | 锁屏判断与二次校验 |
