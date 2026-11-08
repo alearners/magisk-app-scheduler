@@ -1,0 +1,43 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.appscheduler.lsposed'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.appscheduler.lsposed"
+        minSdk 26
+        targetSdk 34
+        versionCode 5
+        versionName "1.4"
+    }
+
+    buildTypes {
+        debug {
+            // 便于本地与 CI 直接产出可安装的 APK
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    // 仅编译期引用 Xposed API（de.robv.android.xposed v82 接口），运行期由 LSPosed 提供
+    compileOnly project(':xposed-api-stub')
+}
