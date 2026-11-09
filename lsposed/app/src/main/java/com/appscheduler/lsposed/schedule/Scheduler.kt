@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import com.appscheduler.lsposed.Config
 import com.appscheduler.lsposed.model.TaskItem
@@ -23,16 +24,19 @@ object Scheduler {
 
     const val ACTION_RUN_TASK = "com.appscheduler.action.RUN_TASK"
     const val EXTRA_TASK_ID = "task_id"
+    private const val REQUEST_CODE = 3000
 
     fun pendingIntent(context: Context, taskId: Long): PendingIntent {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_RUN_TASK
+            // 用 data 区分不同计划，requestCode 固定即可；否则 3000+id%900 在 id 相差 900 时会撞车，
+            // 两个计划共用同一个 PendingIntent，后一个会把前一个覆盖掉。
+            data = Uri.parse("appschedule://task/$taskId")
             putExtra(EXTRA_TASK_ID, taskId)
         }
-        val requestCode = 3000 + (taskId % 900L).toInt()
         return PendingIntent.getBroadcast(
             context,
-            requestCode,
+            REQUEST_CODE,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

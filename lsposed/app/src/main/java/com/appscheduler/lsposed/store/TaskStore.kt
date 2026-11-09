@@ -3,6 +3,7 @@ package com.appscheduler.lsposed.store
 import android.content.Context
 import android.content.SharedPreferences
 import com.appscheduler.lsposed.Config
+import com.appscheduler.lsposed.LogStore
 import com.appscheduler.lsposed.model.TaskItem
 import org.json.JSONArray
 
@@ -13,6 +14,7 @@ object TaskStore {
 
     private const val KEY_TASKS = "tasks_json"
     private const val KEY_NEXT_ID = "next_task_id"
+    private const val KEY_TASKS_BACKUP = "tasks_json_corrupt_backup"
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(Config.PREFS, Context.MODE_PRIVATE)
@@ -27,7 +29,9 @@ object TaskStore {
                 list.add(TaskItem.fromJson(arr.getJSONObject(i)))
             }
         } catch (t: Throwable) {
-            // 数据损坏时视为空列表，避免界面崩溃
+            // 数据损坏时不能直接当空列表：先原样留一份备份，避免下一次保存把用户计划彻底冲掉
+            prefs(context).edit().putString(KEY_TASKS_BACKUP, raw).apply()
+            LogStore.append(context, "计划数据解析失败，已备份原文到 $KEY_TASKS_BACKUP: $t")
         }
         return list
     }

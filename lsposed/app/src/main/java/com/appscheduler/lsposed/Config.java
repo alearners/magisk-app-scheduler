@@ -18,7 +18,8 @@ public class Config {
     public static final String KEY_MANUAL_WAIT = "manual_wait";
 
     public static final String DEFAULT_PKG = "com.example.app";
-    public static final String DEFAULT_PASSWORD = "0219";
+    /** 不预置任何密码，必须在界面里填写；留空时跳过密码注入，只走上滑 + 兜底 */
+    public static final String DEFAULT_PASSWORD = "";
     public static final String DEFAULT_TIMES = "08:00, 20:00";
     public static final int DEFAULT_MANUAL_WAIT = 120;
 

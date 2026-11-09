@@ -99,10 +99,12 @@ public class XposedEntry implements IXposedHookLoadPackage {
         };
 
         IntentFilter filter = new IntentFilter(TaskRunner.ACTION_DISMISS);
+        // 要求发送方持有同签名权限，避免任意 App 广播即可解锁屏幕
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
+            context.registerReceiver(receiver, filter, TaskRunner.DISMISS_PERMISSION, null,
+                    Context.RECEIVER_EXPORTED);
         } else {
-            context.registerReceiver(receiver, filter);
+            context.registerReceiver(receiver, filter, TaskRunner.DISMISS_PERMISSION, null);
         }
         log("广播接收器已注册: " + context.getPackageName());
     }
@@ -136,9 +138,17 @@ public class XposedEntry implements IXposedHookLoadPackage {
 
     private boolean tryCall(Object target, String name, Class<?>[] types, Object[] args) {
         try {
-            Method method = types == null
-                    ? target.getClass().getDeclaredMethod(name)
-                    : target.getClass().getDeclaredMethod(name, types);
+            Method method;
+            try {
+                // 先找本类声明的方法，找不到再向上找继承来的（不同 ROM 里 KeyguardViewMediator 的继承结构不同）
+                method = types == null
+                        ? target.getClass().getDeclaredMethod(name)
+                        : target.getClass().getDeclaredMethod(name, types);
+            } catch (NoSuchMethodException ignored) {
+                method = types == null
+                        ? target.getClass().getMethod(name)
+                        : target.getClass().getMethod(name, types);
+            }
             method.setAccessible(true);
             method.invoke(target, args);
             log("收起锁屏成功: " + name);

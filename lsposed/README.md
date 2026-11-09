@@ -96,14 +96,14 @@ Java 侧只保留执行与钩子（`TaskRunner` / `XposedEntry` / `Config` / `Lo
 ## 工作原理
 
 1. **数据**：每个计划是一个 `TaskItem`（应用列表、定时方式、星期、时间点、间隔、次数、条件、启用），整表以 JSON 存在 `SharedPreferences`（`TaskStore`）。
-2. **调度**：`Scheduler` 为每个计划单独排一个 `PendingIntent`（请求码按计划 id 区分），用 `setExactAndAllowWhileIdle`；无精确闹钟权限时降级 `setAndAllowWhileIdle`；`BootReceiver` 开机重排。
+2. **调度**：`Scheduler` 为每个计划单独排一个 `PendingIntent`（请求码固定，用 `appschedule://task/<id>` 作为 data 区分，避免 id 相差 900 时互相覆盖），用 `setExactAndAllowWhileIdle`；无精确闹钟权限时降级 `setAndAllowWhileIdle`；`BootReceiver` 开机重排。
 3. **条件**：`AlarmReceiver` 触发时先过 `ConditionChecker`（充电 / WiFi / 屏幕熄灭），不满足则记日志并直接排下一次。
-4. **执行**：`TaskRunner` 通过 `su -c` 依次执行 `pm list packages` 校验、`am force-stop`、锁屏判断、`input keyevent 224` 唤醒、广播收起锁屏、`wm dismiss-keyguard`、上滑 + `input text` + 回车，然后对每个应用 `monkey` → 解析 Activity 后 `am start`。解锁只做一次，整个计划共享。
-5. **手动解锁兜底**：自动解锁仍失败且开关打开时，发通知提示「请手动解锁」，每 3 秒轮询锁屏状态，最多等配置秒数；检测到已解锁就继续，超时才放弃。
+4. **执行**：`TaskRunner` 通过 `su -c` 依次执行 `pm list packages` 校验（逐行精确比对，避免包名互为前缀时误判）、`am force-stop`、锁屏判断、`input keyevent 224` 唤醒、广播收起锁屏、`wm dismiss-keyguard`、上滑 + `input text` + 回车，然后对每个应用 `monkey` → 解析 Activity 后 `am start`。解锁只做一次，整个计划共享。
+5. **手动解锁兜底**：自动解锁仍失败且开关打开时，发通知提示「请手动解锁」（Android 13+ 首次启动时申请通知权限，否则看不到这条提醒），每 3 秒轮询锁屏状态，最多等配置秒数；检测到已解锁就继续，超时才放弃。
 6. **钩子**：`XposedEntry` 只作用于 `com.android.systemui`：
-   - 挂钩 `Application.onCreate`，在其中注册 `com.appscheduler.action.DISMISS_KEYGUARD` 广播接收器；
+   - 挂钩 `Application.onCreate`，在其中注册 `com.appscheduler.action.DISMISS_KEYGUARD` 广播接收器；该接收器要求发送方持有 `com.appscheduler.permission.DISMISS_KEYGUARD`（signature 级别），第三方 App 无法伪造「收起锁屏」广播；
    - 挂钩 `com.android.systemui.keyguard.KeyguardViewMediator` 的构造函数捕获实例；
-   - 收到广播后按候选方法列表反射调用：`dismissKeyguard()` → `handleHideKeyguard(boolean)` → `handleHideKeyguard(boolean, boolean)` → `setShowingLocked(false, true)` → `hideKeyguard()`，逐个尝试并在 LSPosed 日志中记录结果。
+   - 收到广播后按候选方法列表反射调用：`dismissKeyguard()` → `handleHideKeyguard(boolean)` → `handleHideKeyguard(boolean, boolean)` → `setShowingLocked(false, true)` → `hideKeyguard()`，先找本类声明的方法、再找继承来的，逐个尝试并在 LSPosed 日志中记录结果。
 
 ## 构建
 
@@ -114,7 +114,7 @@ Java 侧只保留执行与钩子（`TaskRunner` / `XposedEntry` / `Config` / `Lo
 git push origin lsposed
 
 # 或者打标签发布 Release
-git tag lsposed-v1.5 && git push origin lsposed-v1.5
+git tag lsposed-v1.5.1 && git push origin lsposed-v1.5.1
 ```
 
 本地等价命令（需要本机 Android SDK）：
@@ -125,7 +125,7 @@ gradle -p lsposed :app:assembleRelease
 
 ## 安装
 
-1. 下载 `app-scheduler-lsposed-v1.5.apk`；
+1. 下载 `app-scheduler-lsposed-v1.5.1.apk`；
 2. 正常安装（授予 root 权限提示时允许）；
 3. LSPosed 管理器 → 模块 → 启用「定时启动 App · LSPosed」→ 勾选作用域 **System UI**（`com.android.systemui`）；
 4. 重启手机（或重启 SystemUI）；

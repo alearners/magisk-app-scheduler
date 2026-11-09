@@ -25,6 +25,8 @@ public class TaskRunner {
 
     /** 发给 SystemUI 内 LSPosed 钩子的收起锁屏广播 */
     public static final String ACTION_DISMISS = "com.appscheduler.action.DISMISS_KEYGUARD";
+    /** 该广播要求发送方持有同签名权限，防止第三方 App 伪造解锁请求 */
+    public static final String DISMISS_PERMISSION = "com.appscheduler.permission.DISMISS_KEYGUARD";
     public static final String SYSTEMUI_PKG = "com.android.systemui";
 
     private static final int SLIDE_START_PERCENT = 80;
@@ -67,7 +69,7 @@ public class TaskRunner {
                 continue;
             }
             Result listed = su("pm list packages " + pkg);
-            if (!listed.out.contains("package:" + pkg)) {
+            if (!hasPackage(listed.out, pkg)) {
                 log.append("未找到已安装的包: ").append(pkg).append('\n');
                 continue;
             }
@@ -229,6 +231,23 @@ public class TaskRunner {
             }
         }
         return r;
+    }
+
+    /**
+     * `pm list packages &lt;pkg&gt;` 是按子串过滤的，com.foo 会连 com.foobar 一起列出，
+     * 因此必须逐行精确比对，不能直接 contains。
+     */
+    private static boolean hasPackage(String output, String pkg) {
+        if (output == null) {
+            return false;
+        }
+        String[] lines = output.split("\n");
+        for (String line : lines) {
+            if (line.trim().equals("package:" + pkg)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isLocked() {
