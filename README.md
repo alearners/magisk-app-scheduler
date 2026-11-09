@@ -1,5 +1,7 @@
 # 定时启动 App · Magisk / LSPosed 模块
 
+<p align="center"><img src="docs/icon.png" width="132" alt="定时启动 App 应用图标"></p>
+
 按可配置的 crontab 时间点**强制停止并重新启动**指定 App 的 Android 模块。全部可调参数集中在 `config.sh`，升级模块时只需替换脚本、保留自己的配置即可。
 
 目标环境：小米机型 / HyperOS（MIUI）Android 13–15，已 Root（Magisk 或 KernelSU）。
