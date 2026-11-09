@@ -23,7 +23,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  */
 public class XposedEntry implements IXposedHookLoadPackage {
 
-    private static final String TAG = "[AppScheduler] ";
+    private static final String TAG = "[AppTimer] ";
     private static final String KEYGUARD_MEDIATOR =
             "com.android.systemui.keyguard.KeyguardViewMediator";
 

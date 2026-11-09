@@ -156,11 +156,15 @@ su -c sh /data/adb/modules/app_scheduler/service.sh
 | `MANUAL_UNLOCK_FALLBACK` | `1` | 自动解锁失败后是否等用户手动解锁再启动（`1` 开 / `0` 关） |
 | `MANUAL_UNLOCK_WAIT` | `180` | 等待手动解锁的最长秒数，超时放弃本次任务 |
 | `MANUAL_UNLOCK_POLL` | `3` | 等待期间的锁屏状态轮询间隔（秒） |
-| `LOG_FILE` | `/data/local/tmp/app_scheduler.log` | 日志路径 |
+| `LOG_FILE` | `/data/local/tmp/apptimer.log` | 日志路径 |
 | `LOG_MAX_SIZE` | `1048576` | 单份日志上限（字节） |
 | `LOG_MAX_ROTATIONS` | `1` | 保留旧日志份数，`0` 表示不留 |
 | `ENABLE_NOTIFY` | `1` | 失败通知开关 |
-| `NOTIFY_TITLE` / `NOTIFY_TAG` | `定时启动 App` / `app_scheduler` | 通知标题与标签 |
+| `NOTIFY_TITLE` / `NOTIFY_TAG` | `AppTimer` / `apptimer` | 通知标题与标签 |
+| `AUTO_LOCK` | `0` | 启动后无操作是否自动锁屏（`1` 开 / `0` 关） |
+| `AUTO_LOCK_DELAY` | `5` | 无操作多少秒后锁屏（2–600） |
+| `TIMER_MODE` | `cron` | 计时方式：`cron`（crond 系统级定时）或 `internal`（模块内部循环） |
+| `INTERVAL_MINUTES` | `120` | `TIMER_MODE=internal` 时每隔多少分钟跑一次 |
 | `SCHEDULE_CRON_LINES` | `0 */2 * * *` | 调度表达式，可多行 |
 
 ### 调度示例
@@ -193,8 +197,8 @@ ps -A | grep crond
 cat /data/adb/modules/app_scheduler/crontab_dir/root
 
 # 看日志与轮转情况
-cat /data/local/tmp/app_scheduler.log
-ls -l /data/local/tmp/app_scheduler.log*
+cat /data/local/tmp/apptimer.log
+ls -l /data/local/tmp/apptimer.log*
 
 # 锁屏字段自检（不同 ROM 字段不同）
 dumpsys window policy | grep -i keyguard
@@ -227,7 +231,7 @@ git push origin v1.4
 ### 本地自查
 
 ```bash
-sh scripts/package.sh          # 生成 build/app_scheduler-v1.4.zip，与 CI 同样的校验
+sh scripts/package.sh          # 生成 build/apptimer-magisk-v2.0.0.zip（+ .sha256），与 CI 同样的校验
 ```
 
 ---
@@ -236,6 +240,7 @@ sh scripts/package.sh          # 生成 build/app_scheduler-v1.4.zip，与 CI �
 
 | 版本 | versionCode | 变更 |
 | --- | --- | --- |
+| AppTimer v2.0.0 | lsposed 20 / magisk v2.0.0 | 显示名统一为 AppTimer；新增「启动后无操作自动锁屏」（开关 + 2–600 秒，默认 5，切走不误锁）；新增计时方式二选一（系统闹钟 / 应用内部计时器）；两条支路功能对等；打包与产物名统一为 `apptimer-*` |
 | lsposed v1.5.9 | 15 | 省电白名单改为 root 一键加白（`cmd deviceidle whitelist`），因为 HyperOS 会把系统电池优化 intent 改跳到通知页 |
 | lsposed v1.5.8 | 14 | 新增「电池优化未放行」检测与一键跳转（真机实测受限状态下精确闹钟会被系统推迟数分钟），README 补省电策略与「强行停止会丢闹钟」的说明 |
 | lsposed v1.5.7 | 13 | 发布包改用仓库固定签名密钥（原先每次 CI 现场生成 debug 密钥，导致每个版本签名都不同、无法覆盖升级），从此可正常增量安装 |

@@ -53,7 +53,7 @@ MANUAL_UNLOCK_WAIT=180
 MANUAL_UNLOCK_POLL=3
 
 # ==================== 日志参数 ====================
-LOG_FILE="/data/local/tmp/app_scheduler.log"
+LOG_FILE="/data/local/tmp/apptimer.log"
 # 单个日志文件大小上限（字节），默认 1MB
 LOG_MAX_SIZE=1048576
 # 轮转保留份数：0=不保留旧日志；1=.log.1；2=.log.1+.log.2 ...
@@ -63,7 +63,7 @@ LOG_MAX_ROTATIONS=1
 # 1=解锁失败 / 启动失败时发系统通知；0=关闭
 ENABLE_NOTIFY=1
 NOTIFY_TITLE="AppTimer"
-NOTIFY_TAG="app_scheduler"
+NOTIFY_TAG="apptimer"
 
 # ==================== 启动后无操作自动锁屏 ====================
 # 1=启动 App 后，若你一直没操作手机，就自动熄屏上锁；0=关闭

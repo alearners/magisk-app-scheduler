@@ -16,7 +16,7 @@ import java.util.Locale;
  */
 public class LogStore {
 
-    private static final String FILE_NAME = "scheduler.log";
+    private static final String FILE_NAME = "apptimer.log";
     private static final long MAX_SIZE = 512 * 1024L;
 
     private static File file(Context context) {

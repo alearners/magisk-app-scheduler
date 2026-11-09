@@ -169,16 +169,16 @@ gradle -p lsposed :app:assembleRelease
 
 ```bash
 # LSPosed 日志
-logcat -s LSPosed | grep AppScheduler
+logcat -s LSPosed | grep AppTimer
 ```
 
 日志中应出现：
 
 ```
-[AppScheduler] 模块已注入 com.android.systemui
-[AppScheduler] 已挂钩 Application.onCreate
-[AppScheduler] 已挂钩 com.android.systemui.keyguard.KeyguardViewMediator
-[AppScheduler] 已捕获 KeyguardViewMediator 实例
+[AppTimer] 模块已注入 com.android.systemui
+[AppTimer] 已挂钩 Application.onCreate
+[AppTimer] 已挂钩 com.android.systemui.keyguard.KeyguardViewMediator
+[AppTimer] 已捕获 KeyguardViewMediator 实例
 ```
 
 若 `handleHideKeyguard` 等候选方法在 HyperOS 上不存在，日志会输出每个候选失败的异常，此时模块自动退回 `wm dismiss-keyguard` 与上滑密码路径，功能不会中断。

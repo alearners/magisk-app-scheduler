@@ -197,10 +197,10 @@ class RunService : Service() {
 
     private fun buildNotification(action: String?): Notification {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val waiting = action == ACTION_WAIT
-        val title = if (waiting) APP_NAME else APP_NAME
-        val text = if (waiting) "等待你手动解锁后启动…" else "正在执行计划…"
-        val icon = if (waiting) android.R.drawable.ic_lock_idle_lock
+        val waitMode = action == ACTION_WAIT
+        val title = APP_NAME
+        val text = if (waitMode) "等待你手动解锁后启动…" else "正在执行计划…"
+        val icon = if (waitMode) android.R.drawable.ic_lock_idle_lock
         else android.R.drawable.ic_popup_sync
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(

@@ -236,8 +236,8 @@ cat /data/adb/modules/app_scheduler/crontab_dir/root
 ### 6.3 查看日志
 
 ```bash
-cat /data/local/tmp/app_scheduler.log
-ls -l /data/local/tmp/app_scheduler.log*
+cat /data/local/tmp/apptimer.log
+ls -l /data/local/tmp/apptimer.log*
 ```
 
 ### 6.4 手动触发

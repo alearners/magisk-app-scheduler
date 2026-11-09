@@ -16,14 +16,14 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
 CONFIG_FILE="$SCRIPT_DIR/config.sh"
 
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 缺少配置文件: $CONFIG_FILE" >> /data/local/tmp/app_scheduler.log
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 缺少配置文件: $CONFIG_FILE" >> /data/local/tmp/apptimer.log
     exit 1
 fi
 
 # 每次执行都重新加载配置，改完参数无需重启也不需重跑 service.sh
 . "$CONFIG_FILE"
 
-LOG_FILE=${LOG_FILE:-/data/local/tmp/app_scheduler.log}
+LOG_FILE=${LOG_FILE:-/data/local/tmp/apptimer.log}
 LOG_MAX_SIZE=${LOG_MAX_SIZE:-1048576}
 LOG_MAX_ROTATIONS=${LOG_MAX_ROTATIONS:-1}
 APP_PKG=${APP_PKG:-com.example.app}
@@ -40,7 +40,7 @@ WAIT_AFTER_PASSWORD=${WAIT_AFTER_PASSWORD:-2}
 WAIT_BEFORE_LAUNCH=${WAIT_BEFORE_LAUNCH:-1}
 ENABLE_NOTIFY=${ENABLE_NOTIFY:-0}
 NOTIFY_TITLE=${NOTIFY_TITLE:-定时启动 App}
-NOTIFY_TAG=${NOTIFY_TAG:-app_scheduler}
+NOTIFY_TAG=${NOTIFY_TAG:-apptimer}
 # 自动解锁失败后：1=等待用户手动解锁，解锁后立即启动；0=直接放弃
 MANUAL_UNLOCK_FALLBACK=${MANUAL_UNLOCK_FALLBACK:-1}
 MANUAL_UNLOCK_WAIT=${MANUAL_UNLOCK_WAIT:-180}
@@ -85,7 +85,7 @@ if [ -f "$LOG_FILE" ]; then
 fi
 
 # ---------- 单实例锁（避免上一轮未结束时重叠执行） ----------
-LOCK_FILE=/data/local/tmp/app_scheduler.lock
+LOCK_FILE=/data/local/tmp/apptimer.lock
 LOCK_DIR="${LOCK_FILE}.d"
 HOLD_DIR_LOCK=0
 
