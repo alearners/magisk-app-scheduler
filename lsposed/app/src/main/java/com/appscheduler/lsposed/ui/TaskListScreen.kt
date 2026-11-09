@@ -55,6 +55,7 @@ fun TaskListScreen(
     onOpenLog: () -> Unit,
     exactAlarmGranted: Boolean = true,
     onRequestExactAlarm: () -> Unit = {},
+    batteryIgnored: Boolean = true,
     onRequestIgnoreBattery: () -> Unit = {}
 ) {
     Column(
@@ -168,7 +169,7 @@ fun TaskListScreen(
                 }
             }
 
-            if (!batteryOptimizationIgnored()) {
+            if (!batteryIgnored) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Text(
                     "系统正在对本 App 做省电限制，闹钟到点可能被推迟几分钟才唤醒，甚至被挡在「后台受限闹钟」里。建议把本 App 设为不优化。",
@@ -176,7 +177,7 @@ fun TaskListScreen(
                     color = MaterialTheme.colorScheme.error
                 )
                 TextButton(onClick = onRequestIgnoreBattery, modifier = Modifier.fillMaxWidth()) {
-                    Text("去关闭电池优化 ›")
+                    Text("用 root 关闭电池优化 ›")
                 }
             }
         }
@@ -184,18 +185,6 @@ fun TaskListScreen(
         TextButton(onClick = onOpenLog, modifier = Modifier.fillMaxWidth()) {
             Text("查看运行日志 ›")
         }
-    }
-}
-
-@Composable
-private fun batteryOptimizationIgnored(): Boolean {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    return try {
-        val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
-        pm?.isIgnoringBatteryOptimizations(context.packageName) ?: true
-    } catch (t: Throwable) {
-        // Paparazzi / layoutlib 里没有真实 PowerManager，按「已放行」处理，避免截图与实际不符
-        true
     }
 }
 

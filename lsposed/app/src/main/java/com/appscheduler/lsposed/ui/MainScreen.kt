@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.appscheduler.lsposed.Config
 import com.appscheduler.lsposed.LogStore
 import com.appscheduler.lsposed.RunCoordinator
+import com.appscheduler.lsposed.TaskRunner
 import com.appscheduler.lsposed.model.TaskItem
 import com.appscheduler.lsposed.schedule.Scheduler
 import com.appscheduler.lsposed.store.TaskStore
@@ -133,6 +134,10 @@ fun MainScreen() {
         }
     }
 
+    // 省电白名单状态：点过「关闭电池优化」后 +1 强制重算，否则界面会一直显示旧状态
+    var powerTick by remember { mutableStateOf(0) }
+    val batteryIgnored = remember(powerTick) { isBatteryOptimizationIgnored(context) }
+
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { innerPadding ->
         Column(
             modifier = Modifier
@@ -181,20 +186,26 @@ fun MainScreen() {
                             }
                         }
                     },
+                    batteryIgnored = batteryIgnored,
                     onRequestIgnoreBattery = {
-                        try {
-                            val intent = Intent(
-                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                                android.net.Uri.parse("package:" + context.packageName)
-                            )
-                            context.startActivity(intent)
-                        } catch (t: Throwable) {
-                            // 部分 ROM（含部分 HyperOS 机型）没有这个入口，退回到电池优化列表
-                            try {
-                                context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                                toast("请在列表里把「定时启动 App」设为不优化")
-                            } catch (t2: Throwable) {
-                                toast("无法打开系统设置，请在「设置 → 省电与电池」里把本 App 设为无限制")
+                        // HyperOS 上直接 startActivity(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) 会被改跳到
+                        // 「通知与状态列」，所以走 root：先用 deviceidle 白名单一把加白，失败再让用户手动选。
+                        scope.launch {
+                            val done = withContext(Dispatchers.IO) {
+                                val r = TaskRunner.su("cmd deviceidle whitelist +" + context.packageName)
+                                r.code == 0 && !r.timeout
+                            }
+                            if (done) {
+                                powerTick++
+                                toast("已加入省电白名单，定时不会再被系统推迟")
+                            } else {
+                                withContext(Dispatchers.IO) {
+                                    TaskRunner.su(
+                                        "am start -a android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS " +
+                                            "-d package:" + context.packageName
+                                    )
+                                }
+                                toast("请在弹出的页面选择「无限制」")
                             }
                         }
                     }
@@ -234,8 +245,17 @@ fun MainScreen() {
     }
 }
 
-/** 所有启用计划里最近一次的触发时间 */
-private fun describeSoonest(context: Context, tasks: List<TaskItem>, masterEnabled: Boolean): String {
+/** 是否已在系统省电白名单里（Paparazzi / layoutlib 里取不到时按「已放行」处理，避免截图与实际不符） */
+private fun isBatteryOptimizationIgnored(context: Context): Boolean {
+    return try {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        pm?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+    } catch (t: Throwable) {
+        true
+    }
+}
+
+/** 所有启用计划里最近一次的触发时间 */private fun describeSoonest(context: Context, tasks: List<TaskItem>, masterEnabled: Boolean): String {
     if (!masterEnabled) return "未启用"
     val usable = tasks.filter { it.enabled && it.packages.isNotEmpty() }
     if (usable.isEmpty()) return "暂无计划"
