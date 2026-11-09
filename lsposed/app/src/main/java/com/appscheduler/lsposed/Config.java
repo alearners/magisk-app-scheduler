@@ -16,12 +16,24 @@ public class Config {
     public static final String KEY_ENABLED = "enabled";
     public static final String KEY_MANUAL_FALLBACK = "manual_fallback";
     public static final String KEY_MANUAL_WAIT = "manual_wait";
+    /** 启动完 App 后，若用户一直没操作屏幕，过多少秒自动熄屏上锁 */
+    public static final String KEY_AUTO_LOCK = "auto_lock";
+    public static final String KEY_AUTO_LOCK_DELAY = "auto_lock_delay";
+    /** 调度触发的时间基准：系统闹钟（alarm）或应用内部计时器（internal） */
+    public static final String KEY_TIMER_MODE = "timer_mode";
 
     public static final String DEFAULT_PKG = "com.example.app";
     /** 不预置任何密码，必须在界面里填写；留空时跳过密码注入，只走上滑 + 兜底 */
     public static final String DEFAULT_PASSWORD = "";
     public static final String DEFAULT_TIMES = "08:00, 20:00";
     public static final int DEFAULT_MANUAL_WAIT = 120;
+    public static final int DEFAULT_AUTO_LOCK_DELAY = 5;
+
+    /** 默认不自动锁屏：它会真的把屏幕关掉，必须是用户明确打开的行为 */
+    public static final boolean DEFAULT_AUTO_LOCK = false;
+    public static final String TIMER_ALARM = "alarm";
+    public static final String TIMER_INTERNAL = "internal";
+    public static final String DEFAULT_TIMER_MODE = TIMER_ALARM;
 
     private final SharedPreferences sp;
 
@@ -71,6 +83,40 @@ public class Config {
         return value;
     }
 
+    /**
+     * 启动完 App 后是否自动熄屏上锁。
+     */
+    public boolean autoLock() {
+        return sp.getBoolean(KEY_AUTO_LOCK, DEFAULT_AUTO_LOCK);
+    }
+
+    /**
+     * 启动后等待多少秒没有操作就锁屏，2–600 秒。
+     */
+    public int autoLockDelay() {
+        int value = sp.getInt(KEY_AUTO_LOCK_DELAY, DEFAULT_AUTO_LOCK_DELAY);
+        if (value < 2) {
+            value = 2;
+        }
+        if (value > 600) {
+            value = 600;
+        }
+        return value;
+    }
+
+    /**
+     * 调度触发的时间基准：TIMER_ALARM（系统闹钟）或 TIMER_INTERNAL（应用内部计时器）。
+     */
+    public String timerMode() {
+        String value = sp.getString(KEY_TIMER_MODE, DEFAULT_TIMER_MODE);
+        return TIMER_INTERNAL.equals(value) ? TIMER_INTERNAL : TIMER_ALARM;
+    }
+
+    /** 内部计时器模式：不依赖系统闹钟，由前台服务自己数时间 */
+    public boolean internalTimer() {
+        return TIMER_INTERNAL.equals(timerMode());
+    }
+
     public void save(String pkg, String password, String times, boolean enabled) {
         sp.edit()
                 .putString(KEY_PKG, pkg == null ? "" : pkg.trim())
@@ -96,11 +142,25 @@ public class Config {
      * 全局设置：调度总开关、锁屏密码、手动解锁兜底。计划本身存在 TaskStore 里。
      */
     public void saveGlobal(boolean enabled, String password, boolean manualFallback, int manualWait) {
+        // 兼容旧调用：不动自动锁屏与计时方式
         sp.edit()
                 .putBoolean(KEY_ENABLED, enabled)
                 .putString(KEY_PASSWORD, password == null ? "" : password.trim())
                 .putBoolean(KEY_MANUAL_FALLBACK, manualFallback)
                 .putInt(KEY_MANUAL_WAIT, manualWait)
+                .apply();
+    }
+
+    public void saveGlobal(boolean enabled, String password, boolean manualFallback, int manualWait,
+                           boolean autoLock, int autoLockDelay, String timerMode) {
+        sp.edit()
+                .putBoolean(KEY_ENABLED, enabled)
+                .putString(KEY_PASSWORD, password == null ? "" : password.trim())
+                .putBoolean(KEY_MANUAL_FALLBACK, manualFallback)
+                .putInt(KEY_MANUAL_WAIT, manualWait)
+                .putBoolean(KEY_AUTO_LOCK, autoLock)
+                .putInt(KEY_AUTO_LOCK_DELAY, autoLockDelay)
+                .putString(KEY_TIMER_MODE, TIMER_INTERNAL.equals(timerMode) ? TIMER_INTERNAL : TIMER_ALARM)
                 .apply();
     }
 }

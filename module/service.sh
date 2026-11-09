@@ -52,6 +52,28 @@ done
 # 额外等待，避免过早启动 crond
 sleep "$WAIT_BOOT_EXTRA"
 
+# ---------- 计时方式 ----------
+# internal：不用 crond，由模块自己的循环数时间（等价于「应用内部计时器」）
+TIMER_MODE=${TIMER_MODE:-cron}
+if [ "$TIMER_MODE" = "internal" ]; then
+    INTERVAL_MINUTES=${INTERVAL_MINUTES:-120}
+    case "$INTERVAL_MINUTES" in
+        ""|*[!0-9]*) INTERVAL_MINUTES=120 ;;
+    esac
+    [ "$INTERVAL_MINUTES" -lt 1 ] && INTERVAL_MINUTES=1
+    INTERVAL_SEC=$((INTERVAL_MINUTES * 60))
+    pkill crond 2>/dev/null
+    log "计时方式：内部计时器，每 ${INTERVAL_MINUTES} 分钟执行一次（未启动 crond）"
+    ( while :; do
+          sleep "$INTERVAL_SEC"
+          "$MODDIR/run_app.sh" >> "$LOG_FILE" 2>&1
+      done ) &
+    echo $! > "$MODDIR/timer.pid" 2>/dev/null
+    log "=== 开机服务结束（内部计时器已启动） ==="
+    exit 0
+fi
+log "计时方式：crond（系统级定时）"
+
 # ---------- 查找 BusyBox ----------
 BUSYBOX="/data/adb/magisk/busybox"
 if [ ! -x "$BUSYBOX" ]; then

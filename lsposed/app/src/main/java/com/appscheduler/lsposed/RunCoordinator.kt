@@ -91,6 +91,14 @@ object RunCoordinator {
                     LogStore.append(context, log.toString())
                     TaskRunner.notifyManualUnlock(context, waitSec)
                     scheduleTimeout(context, waitSec)
+                    // 起一个守候服务盯着解锁事件：USER_PRESENT 是隐式广播，清单里静态注册收不到，
+                    // 必须由前台服务动态注册 + 轮询兜底，否则整个队列永远等不到人
+                    if (!RunService.start(context, RunService.ACTION_WAIT, 0L)) {
+                        LogStore.append(
+                            context,
+                            "守候服务启动被拒，仅靠超时闹钟与解锁广播兜底\n"
+                        )
+                    }
                     // 挂起等待用户解锁的同时，把计划的下一次触发排好；
                     // 否则这次挂起就等于把整个计划停掉了（超时或解锁失败后不再有后续闹钟）
                     Scheduler.schedule(context, task)
@@ -110,6 +118,9 @@ object RunCoordinator {
         LogStore.append(context, log.toString())
         if (!ok) {
             TaskRunner.notifyFailure(context, log.toString())
+        } else {
+            // 启动成功后按设置排一次「无操作就锁屏」，把屏幕重新收回去
+            AutoLock.arm(context, config.autoLockDelay(), runnable)
         }
         applyResult(context, task, ok)
     }
@@ -158,6 +169,8 @@ object RunCoordinator {
             LogStore.append(context, log.toString())
             if (!ok) {
                 TaskRunner.notifyFailure(context, log.toString())
+            } else {
+                AutoLock.arm(context, Config.get(context).autoLockDelay(), runnable)
             }
             PendingStore.remove(context, entry.taskId)
             applyResult(context, task, ok)

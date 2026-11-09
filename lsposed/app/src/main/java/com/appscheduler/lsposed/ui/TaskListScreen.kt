@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.appscheduler.lsposed.Config
 import com.appscheduler.lsposed.model.TaskItem
 
 /**
@@ -51,6 +52,12 @@ fun TaskListScreen(
     onManualFallbackChange: (Boolean) -> Unit,
     manualWait: String,
     onManualWaitChange: (String) -> Unit,
+    autoLock: Boolean = false,
+    onAutoLockChange: (Boolean) -> Unit = {},
+    autoLockDelay: String = "5",
+    onAutoLockDelayChange: (String) -> Unit = {},
+    timerMode: String = Config.TIMER_ALARM,
+    onTimerModeChange: (String) -> Unit = {},
     onSaveSettings: () -> Unit,
     onOpenLog: () -> Unit,
     exactAlarmGranted: Boolean = true,
@@ -65,7 +72,7 @@ fun TaskListScreen(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        ScreenHeader("定时启动 App", "LSPosed 版 · 多应用 · 多计划 · 条件触发")
+        ScreenHeader("AppTimer", "LSPosed 版 · 多应用 · 多计划 · 条件触发")
 
         Card(
             shape = RoundedCornerShape(20.dp),
@@ -152,6 +159,41 @@ fun TaskListScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            SwitchRow(
+                title = "启动后无操作自动锁屏",
+                description = "启动完成后若你一直没碰手机，就自动熄屏上锁；切到别的界面则跳过",
+                checked = autoLock,
+                onCheckedChange = onAutoLockChange
+            )
+
+            if (autoLock) {
+                OutlinedTextField(
+                    value = autoLockDelay,
+                    onValueChange = onAutoLockDelayChange,
+                    label = { Text("无操作多少秒后锁屏") },
+                    supportingText = { Text("2–600 秒，默认 5 秒") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            SwitchRow(
+                title = "用应用内部计时器计时",
+                description = if (timerMode == Config.TIMER_INTERNAL) {
+                    "当前：内部计时器。常驻前台服务自己数时间，不受闹钟延迟影响，但通知栏会一直有一条常驻通知"
+                } else {
+                    "当前：系统闹钟。进程被杀也能到点触发，但可能被省电策略推迟几分钟"
+                },
+                checked = timerMode == Config.TIMER_INTERNAL,
+                onCheckedChange = {
+                    onTimerModeChange(if (it) Config.TIMER_INTERNAL else Config.TIMER_ALARM)
+                }
+            )
 
             Button(onClick = onSaveSettings, modifier = Modifier.fillMaxWidth()) {
                 Text("保存全局设置")

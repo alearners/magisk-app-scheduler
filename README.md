@@ -1,6 +1,6 @@
-# 定时启动 App · Magisk / LSPosed 模块
+# AppTimer · Magisk / LSPosed 模块
 
-<p align="center"><img src="docs/icon.png" width="132" alt="定时启动 App 应用图标"></p>
+<p align="center"><img src="docs/icon.png" width="132" alt="AppTimer 应用图标"></p>
 
 按可配置的 crontab 时间点**强制停止并重新启动**指定 App 的 Android 模块。全部可调参数集中在 `config.sh`，升级模块时只需替换脚本、保留自己的配置即可。
 
@@ -14,14 +14,26 @@
 
 | 分支 | 产物 | 形态 | 适用场景 |
 | --- | --- | --- | --- |
-| `main` | `app_scheduler-vX.zip` | Magisk 模块（纯 shell） | 首选。Magisk / KernelSU 直接刷入，无需额外框架 |
-| `lsposed` | `app-scheduler-lsposed-vX.apk` | LSPosed 模块（APK）+ 内置调度 | 需要更可靠的解锁方式：用 Xposed 钩子收起锁屏，不再依赖 `input text` 注入密码 |
+| `main` | `apptimer-magisk-vX.zip` | Magisk 模块（纯 shell） | 首选。Magisk / KernelSU 直接刷入，无需额外框架 |
+| `lsposed` | `apptimer-lsposed-vX.apk` | LSPosed 模块（APK）+ 内置调度 | 需要更可靠的解锁方式：用 Xposed 钩子收起锁屏，不再依赖 `input text` 注入密码 |
 
 `lsposed` 分支在 `main` 的基础上新增 `lsposed/` 工程：APK 自带界面与定时器，通过 `su` 执行与 shell 版等价的流程，并用 Xposed 钩子在 SystemUI 内收起 Keyguard，注入密码只作为兜底。
 
 LSPosed 版支持**多应用、多计划、多定时方式、启动条件**：界面里可直接浏览并勾选已安装应用（无需手输包名），一个计划可同时启动多个 App，定时可选「按时间点 / 按星期 / 按间隔循环」并设置总执行次数，还能限定「仅充电 / 仅 WiFi / 仅屏幕熄灭」时执行。
 
 界面用 **Kotlin + Jetpack Compose（Material3）** 编写：计划列表、计划编辑、应用选择、运行日志四个页面，圆角卡片 + 青蓝主色（`#1FA0CC`）+ 浅蓝灰背景，Android 12 以上跟随系统动态取色，整体风格参考开源项目 Sesame-AG 的 Compose 主题与卡片式布局。
+
+### v2.0.0 起的新增能力（两条支路功能对等）
+
+| 能力 | Magisk 版（`main`） | LSPosed 版（`lsposed`） |
+| --- | --- | --- |
+| 启动后无操作自动锁屏 | `config.sh` 的 `AUTO_LOCK` + `AUTO_LOCK_DELAY`，`run_app.sh` 起子进程到点判定后 `input keyevent 223` | 全局设置里开关 + 秒数，`AutoLock` 排闹钟，到点重新读配置、确认前台仍是目标 App 才熄屏 |
+| 计时方式二选一 | `TIMER_MODE`：`cron`（crond 驱动）或 `internal`（模块自己的 sleep 循环，按 `INTERVAL_MINUTES`） | 全局设置里开关：系统闹钟（`AlarmManager`）或应用内部计时器（常驻 `TimerService`） |
+| 解锁后续跑 | 轮询 Keyguard 状态（`MANUAL_UNLOCK_POLL`），解锁即启动 | 前台服务**动态注册** `USER_PRESENT` + 2 秒轮询双保险 |
+
+> 「启动后无操作自动锁屏」只看两个条件：到点时屏幕没被用户自己锁掉，且前台还是本次启动的那个 App。用户一旦切到别的界面，这一步自动跳过，不会误锁。
+>
+> APK 的 `applicationId` 仍是 `com.appscheduler.lsposed`（改名只动显示名、包文件名与文档）：改包名会让 LSPosed 模块作用域、`signature` 权限链路和既有机上的覆盖升级全部失效，必须卸载重装。
 
 ### 界面预览
 
@@ -210,7 +222,7 @@ git push origin v1.4
 ### lsposed 分支（APK）
 
 - 触发：push 到 `lsposed`、`lsposed-v*` 标签、手动触发。
-- 步骤：JDK 17 + Gradle 8.7 → `:app:assembleRelease` → 重命名并上传 `app-scheduler-lsposed-vX.apk` + sha256 → 标签时发布 Release。
+- 步骤：JDK 17 + Gradle 8.7 → `:app:assembleRelease` → 重命名并上传 `apptimer-lsposed-vX.apk` + sha256 → 标签时发布 Release。
 
 ### 本地自查
 

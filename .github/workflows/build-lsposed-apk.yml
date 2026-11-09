@@ -73,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION=$(grep -m1 'versionName' lsposed/app/build.gradle | sed -E 's/.*"([^"]+)".*/\1/')
-          OUT="app-scheduler-lsposed-v${VERSION}.apk"
+          OUT="apptimer-lsposed-v${VERSION}.apk"
           APK=$(find lsposed/app/build/outputs/apk/release -name '*.apk' | head -n 1)
           cp "$APK" "$OUT"
           sha256sum "$OUT" | tee "${OUT}.sha256"

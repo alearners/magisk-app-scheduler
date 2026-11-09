@@ -62,10 +62,24 @@ LOG_MAX_ROTATIONS=1
 # ==================== 失败通知 ====================
 # 1=解锁失败 / 启动失败时发系统通知；0=关闭
 ENABLE_NOTIFY=1
-NOTIFY_TITLE="定时启动 App"
+NOTIFY_TITLE="AppTimer"
 NOTIFY_TAG="app_scheduler"
 
+# ==================== 启动后无操作自动锁屏 ====================
+# 1=启动 App 后，若你一直没操作手机，就自动熄屏上锁；0=关闭
+# 到点时如果前台已经不是目标 App（说明用户切走了），会自动跳过，不会误锁
+AUTO_LOCK=0
+# 无操作多少秒后锁屏（2–600）
+AUTO_LOCK_DELAY=5
+
 # ==================== 定时调度 ====================
+# 计时方式：
+#   cron     = 由 BusyBox crond 驱动（进程被杀也能触发，等价于「系统闹钟」）
+#   internal = 由模块自己的 sleep 循环驱动（不依赖 crond，但只能按固定间隔，且依赖模块进程存活）
+TIMER_MODE="cron"
+# TIMER_MODE=internal 时的执行间隔（分钟）
+INTERVAL_MINUTES=120
+
 # 每行一个 crontab 时间表达式（分 时 日 月 周）
 # 可写多行，每行都会生成一条独立任务；空行与 # 开头的行会被跳过
 # 修改后需重启设备，或手动重新执行 service.sh 以生效

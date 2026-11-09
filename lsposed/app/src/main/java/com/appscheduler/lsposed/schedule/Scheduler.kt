@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import com.appscheduler.lsposed.Config
+import com.appscheduler.lsposed.TimerService
 import com.appscheduler.lsposed.model.TaskItem
 import com.appscheduler.lsposed.store.TaskStore
 import java.text.SimpleDateFormat
@@ -51,11 +52,34 @@ object Scheduler {
         TaskStore.all(context).forEach { schedule(context, it) }
     }
 
+    /**
+     * 按当前「计时方式」切换底层计时：
+     * - 系统闹钟：撤销内部计时服务，重排全部闹钟；
+     * - 内部计时器：撤销全部闹钟，拉起 TimerService。
+     */
+    fun applyMode(context: Context) {
+        val config = Config.get(context)
+        if (config.enabled() && config.internalTimer()) {
+            TaskStore.all(context).forEach { amCancel(context, it.id) }
+            TimerService.start(context)
+        } else {
+            TimerService.stop(context)
+            rescheduleAll(context)
+        }
+    }
+
+    private fun amCancel(context: Context, taskId: Long) {
+        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        am.cancel(pendingIntent(context, taskId))
+    }
+
     /** 已启用则排下一次，否则撤销闹钟。 */
     fun schedule(context: Context, task: TaskItem) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val masterEnabled = Config.get(context).enabled()
-        if (!masterEnabled || !task.enabled || task.packages.isEmpty()) {
+        val config = Config.get(context)
+        val masterEnabled = config.enabled()
+        // 内部计时器模式下不排任何系统闹钟：时间全部由 TimerService 自己数
+        if (config.internalTimer() || !masterEnabled || !task.enabled || task.packages.isEmpty()) {
             am.cancel(pendingIntent(context, task.id))
             return
         }

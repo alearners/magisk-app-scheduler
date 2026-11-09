@@ -4,12 +4,15 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import com.appscheduler.lsposed.store.PendingStore
 import java.util.concurrent.Executors
 
 /**
@@ -18,27 +21,42 @@ import java.util.concurrent.Executors
  * 为什么需要它：解锁 + 启动多 App 的流程可能超过广播接收器约 10 秒的执行窗口，
  * 而「等用户手动解锁」的兜底更是几十秒到半小时。放到前台服务里执行，进程不会被随手回收，
  * 也不需要让 BroadcastReceiver 挂着 PendingResult 干等。
+ *
+ * [ACTION_WAIT] 是「挂起等待手动解锁」期间的守候服务：它用 registerReceiver 动态注册
+ * USER_PRESENT（动态注册不受 Android 8+ 隐式广播限制），同时每 2 秒轮询一次锁屏状态，
+ * 双保险保证用户解锁后能把队列跑掉。之前靠清单里静态注册的接收器，真机上从来没收到过广播。
  */
 class RunService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val action = intent?.action
+        val taskId = intent?.getLongExtra(EXTRA_TASK_ID, 0L) ?: 0L
+
         // 前台通知起不来（少权限、渠道被禁用、Android 14 的 specialUse 限制）时不能让服务直接崩，
         // 退化成普通后台服务把这一轮跑完，总比丢掉整次任务好
         try {
-            startForeground(NOTIFICATION_ID, buildNotification())
+            startForeground(
+                if (action == ACTION_WAIT) WAIT_NOTIFICATION_ID else NOTIFICATION_ID,
+                buildNotification(action)
+            )
         } catch (t: Throwable) {
             LogStore.append(this, "前台服务通知失败，退化为普通服务执行: $t\n")
         }
-        val action = intent?.action
-        val taskId = intent?.getLongExtra(EXTRA_TASK_ID, 0L) ?: 0L
+
+        if (action == ACTION_WAIT) {
+            startWaitLoop(startId)
+            return START_NOT_STICKY
+        }
+
         scheduleWatchdog(startId)
         POOL.execute {
             try {
                 when (action) {
                     ACTION_LAUNCH -> RunCoordinator.launchPending(this)
                     ACTION_EXPIRE -> RunCoordinator.expirePending(this)
+                    ACTION_LOCK -> AutoLock.fire(this)
                     else -> RunCoordinator.executeTask(this, taskId)
                 }
             } catch (t: Throwable) {
@@ -50,6 +68,83 @@ class RunService : Service() {
             }
         }
         return START_NOT_STICKY
+    }
+
+    /**
+     * 守候待启动队列：动态注册 USER_PRESENT + 轮询兜底。
+     *
+     * 退出条件：队列清空 / 全部条目过期 / 硬上限（默认 35 分钟）到时。
+     * 硬上限是防御性的——正常情况下队列在用户解锁或超时后就会清空。
+     */
+    private fun startWaitLoop(startId: Int) {
+        // 同一个服务实例可能被重复 start（每个计划挂起都会拉起一次），只留一个守候线程
+        if (waitThread?.isAlive == true) {
+            return
+        }
+        val app = applicationContext
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_USER_PRESENT) {
+                    userPresent = true
+                }
+            }
+        }
+        var registered = false
+        try {
+            registerReceiver(receiver, IntentFilter(Intent.ACTION_USER_PRESENT))
+            registered = true
+        } catch (t: Throwable) {
+            LogStore.append(app, "动态注册解锁广播失败，改用轮询: $t\n")
+        }
+
+        val thread = Thread {
+            val hardStopAt = System.currentTimeMillis() + WAIT_HARD_LIMIT_SEC * 1000L
+            try {
+                while (System.currentTimeMillis() < hardStopAt) {
+                    val entries = PendingStore.all(app)
+                    if (entries.isEmpty()) {
+                        break
+                    }
+                    val now = System.currentTimeMillis()
+                    if (entries.all { now > it.deadline }) {
+                        RunCoordinator.expirePending(app)
+                        break
+                    }
+                    // 解锁了就立刻跑；仍在锁屏时把轮询间隔拉长，减少无谓的 dumpsys
+                    if (!TaskRunner.isLocked()) {
+                        RunCoordinator.launchPending(app)
+                        if (PendingStore.all(app).isEmpty()) {
+                            break
+                        }
+                    }
+                    sleep(if (userPresent) 500L else WAIT_POLL_MS)
+                    userPresent = false
+                }
+            } catch (t: Throwable) {
+                LogStore.append(app, "守候解锁异常: $t")
+            } finally {
+                if (registered) {
+                    try {
+                        unregisterReceiver(receiver)
+                    } catch (t: Throwable) {
+                        // 已经注销过，忽略
+                    }
+                }
+                stopForegroundRun()
+                // 用无参 stopSelf：守候期间可能又被 start 过一次，带 startId 的版本会失效
+                stopSelf()
+            }
+        }
+        waitThread = thread
+        thread.start()
+    }
+
+    private fun sleep(millis: Long) {
+        try {
+            Thread.sleep(millis)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
     }
 
     /**
@@ -79,6 +174,14 @@ class RunService : Service() {
     private var watchdogHandler: Handler? = null
     private var watchdogRunnable: Runnable? = null
 
+    /** 广播线程写、守候线程读，必须 volatile */
+    @Volatile
+    private var userPresent = false
+
+    /** 守候线程：同一个服务实例只允许一个 */
+    @Volatile
+    private var waitThread: Thread? = null
+
     private fun stopForegroundRun() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -92,26 +195,31 @@ class RunService : Service() {
         }
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(action: String?): Notification {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val waiting = action == ACTION_WAIT
+        val title = if (waiting) APP_NAME else APP_NAME
+        val text = if (waiting) "等待你手动解锁后启动…" else "正在执行计划…"
+        val icon = if (waiting) android.R.drawable.ic_lock_idle_lock
+        else android.R.drawable.ic_popup_sync
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID, "定时启动 App · 执行中", NotificationManager.IMPORTANCE_LOW
+                CHANNEL_ID, "$APP_NAME · 执行中", NotificationManager.IMPORTANCE_LOW
             )
             channel.setShowBadge(false)
             nm.createNotificationChannel(channel)
             return Notification.Builder(this, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_popup_sync)
-                .setContentTitle("定时启动 App")
-                .setContentText("正在执行计划…")
+                .setSmallIcon(icon)
+                .setContentTitle(title)
+                .setContentText(text)
                 .setOngoing(true)
                 .build()
         }
         @Suppress("DEPRECATION")
         return Notification.Builder(this)
-            .setSmallIcon(android.R.drawable.ic_popup_sync)
-            .setContentTitle("定时启动 App")
-            .setContentText("正在执行计划…")
+            .setSmallIcon(icon)
+            .setContentTitle(title)
+            .setContentText(text)
             .setOngoing(true)
             .build()
     }
@@ -120,13 +228,25 @@ class RunService : Service() {
         const val ACTION_RUN = "com.appscheduler.action.SERVICE_RUN"
         const val ACTION_LAUNCH = "com.appscheduler.action.SERVICE_LAUNCH"
         const val ACTION_EXPIRE = "com.appscheduler.action.SERVICE_EXPIRE"
+        const val ACTION_WAIT = "com.appscheduler.action.SERVICE_WAIT"
+        const val ACTION_LOCK = "com.appscheduler.action.SERVICE_LOCK"
         const val EXTRA_TASK_ID = "task_id"
+
+        /** 显示名统一在这里改一次 */
+        const val APP_NAME = "AppTimer"
 
         private const val CHANNEL_ID = "scheduler_run"
         private const val NOTIFICATION_ID = 2003
+        private const val WAIT_NOTIFICATION_ID = 2004
 
         /** 单次执行的最长存活时间（秒），超过就强制收尾 */
         private const val WATCHDOG_SEC = 180
+
+        /** 守候服务的硬上限（秒）：正常流程会提前清空队列退出，这里只是防止服务常驻 */
+        private const val WAIT_HARD_LIMIT_SEC = 2100
+
+        /** 锁屏期间轮询解锁状态的间隔 */
+        private const val WAIT_POLL_MS = 2000L
 
         /** 串行执行，避免多个计划同时抢 su 与屏幕 */
         private val POOL = Executors.newSingleThreadExecutor()

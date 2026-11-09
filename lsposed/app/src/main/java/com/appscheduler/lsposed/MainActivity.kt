@@ -7,6 +7,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.appscheduler.lsposed.schedule.Scheduler
 import com.appscheduler.lsposed.ui.AppSchedulerTheme
 import com.appscheduler.lsposed.ui.MainScreen
 
@@ -19,6 +20,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotificationPermission()
+        // 进程刚起来时把计时方式对上：内部计时器模式要确保常驻服务在跑，
+        // 系统闹钟模式则重排一次闹钟（进程被杀期间可能漏排）
+        try {
+            Scheduler.applyMode(this)
+        } catch (t: Throwable) {
+            // 计时模式恢复失败不应该拦住界面
+        }
         setContent {
             AppSchedulerTheme {
                 MainScreen()

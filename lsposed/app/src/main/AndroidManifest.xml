@@ -59,6 +59,16 @@
                 android:value="按计划执行自动解锁与启动 App，并承接用户手动解锁后的后续启动" />
         </service>
 
+        <!-- 内部计时器模式下的常驻计时服务：不依赖系统闹钟，自己数到点就执行 -->
+        <service
+            android:name=".TimerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="以应用内部计时器作为调度基准时，常驻计算并触发计划的执行时间" />
+        </service>
+
         <receiver
             android:name=".schedule.BootReceiver"
             android:exported="true">

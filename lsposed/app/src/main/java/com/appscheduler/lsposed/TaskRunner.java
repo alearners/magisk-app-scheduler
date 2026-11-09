@@ -309,6 +309,37 @@ public class TaskRunner {
         return null;
     }
 
+    /**
+     * 当前拿到焦点的窗口所属包名；读不到时返回空串。
+     * 用于判断「自动锁屏」前用户是否已经切到别的界面，避免把用户正在用的 App 关掉。
+     */
+    public static String foregroundPackage() {
+        Result r = su("dumpsys window | grep -m1 mCurrentFocus=");
+        if (r.timeout || r.out.isEmpty()) {
+            return "";
+        }
+        String line = r.out.trim();
+        int slash = line.indexOf('/');
+        if (slash < 0) {
+            return "";
+        }
+        int start = line.lastIndexOf(' ', slash);
+        if (start < 0) {
+            return "";
+        }
+        return line.substring(start + 1, slash).trim();
+    }
+
+    /** 熄屏并立即上锁（SLEEP 键），只有 root 下才有效 */
+    public static boolean lockScreen(StringBuilder log) {
+        Result r = su("input keyevent 223");
+        if (r.timeout || r.code != 0) {
+            log.append("熄屏上锁失败: ").append(r.out.trim()).append('\n');
+            return false;
+        }
+        return true;
+    }
+
     public static void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -363,7 +394,7 @@ public class TaskRunner {
                     String last = lines.length > 0 ? lines[lines.length - 1] : "执行失败";
                     Notification.Builder builder = new Notification.Builder(app, CHANNEL_ID)
                             .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                            .setContentTitle("定时启动 App 执行失败")
+                            .setContentTitle("AppTimer 执行失败")
                             .setContentText(last)
                             .setAutoCancel(true);
                     nm.notify(2001, builder.build());
@@ -380,7 +411,7 @@ public class TaskRunner {
             return;
         }
         NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID, "定时启动 App", NotificationManager.IMPORTANCE_HIGH);
+                CHANNEL_ID, "AppTimer", NotificationManager.IMPORTANCE_HIGH);
         nm.createNotificationChannel(channel);
         channelReady = true;
     }

@@ -54,6 +54,9 @@ fun MainScreen() {
     var password by remember { mutableStateOf(prefs.password()) }
     var manualFallback by remember { mutableStateOf(prefs.manualFallback()) }
     var manualWait by remember { mutableStateOf(prefs.manualWait().toString()) }
+    var autoLock by remember { mutableStateOf(prefs.autoLock()) }
+    var autoLockDelay by remember { mutableStateOf(prefs.autoLockDelay().toString()) }
+    var timerMode by remember { mutableStateOf(prefs.timerMode()) }
     var log by remember { mutableStateOf(LogStore.read(context)) }
 
     fun reload() {
@@ -70,11 +73,19 @@ fun MainScreen() {
             masterEnabled,
             password,
             manualFallback,
-            manualWait.toIntOrNull() ?: Config.DEFAULT_MANUAL_WAIT
+            manualWait.toIntOrNull() ?: Config.DEFAULT_MANUAL_WAIT,
+            autoLock,
+            autoLockDelay.toIntOrNull() ?: Config.DEFAULT_AUTO_LOCK_DELAY,
+            timerMode
         )
-        Scheduler.rescheduleAll(context)
+        // 计时方式可能变了：切内部计时器要拉起常驻服务，切回闹钟要重排闹钟
+        Scheduler.applyMode(context)
         reload()
-        toast(if (masterEnabled) "已保存，定时已启用" else "已保存，定时未启用")
+        val modeText = if (timerMode == Config.TIMER_INTERNAL) "应用内部计时器" else "系统闹钟"
+        toast(
+            if (masterEnabled) "已保存，定时已启用（$modeText）"
+            else "已保存，定时未启用"
+        )
     }
 
     fun saveDraft() {
@@ -172,6 +183,12 @@ fun MainScreen() {
                     onManualFallbackChange = { manualFallback = it },
                     manualWait = manualWait,
                     onManualWaitChange = { manualWait = it },
+                    autoLock = autoLock,
+                    onAutoLockChange = { autoLock = it },
+                    autoLockDelay = autoLockDelay,
+                    onAutoLockDelayChange = { autoLockDelay = it },
+                    timerMode = timerMode,
+                    onTimerModeChange = { timerMode = it },
                     onSaveSettings = { saveSettings() },
                     onOpenLog = { screen = Screen.LOG },
                     exactAlarmGranted = exactAlarmGranted,
