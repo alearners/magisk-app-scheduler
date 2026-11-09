@@ -47,7 +47,24 @@ jobs:
           gradle -p lsposed :app:testDebugUnitTest --no-daemon --stacktrace \
             --tests 'com.appscheduler.lsposed.TaskItemTest'
 
+      - name: Decode signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.LSPOSED_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "${KEYSTORE_B64:-}" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "已使用仓库固定签名密钥"
+          else
+            echo "::warning::未配置 LSPOSED_KEYSTORE_B64，本次将使用 debug 签名（该包无法覆盖升级）"
+          fi
+
       - name: Build APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.LSPOSED_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.LSPOSED_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.LSPOSED_KEY_PASSWORD }}
         run: |
           gradle -p lsposed :app:assembleRelease --no-daemon --stacktrace --warning-mode all
 

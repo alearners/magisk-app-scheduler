@@ -123,7 +123,7 @@ Java 侧只保留执行与钩子（`TaskRunner` / `XposedEntry` / `Config` / `Lo
 git push origin lsposed
 
 # 或者打标签发布 Release
-git tag lsposed-v1.5.6 && git push origin lsposed-v1.5.6
+git tag lsposed-v1.5.7 && git push origin lsposed-v1.5.7
 ```
 
 本地等价命令（需要本机 Android SDK）：
@@ -132,14 +132,18 @@ git tag lsposed-v1.5.6 && git push origin lsposed-v1.5.6
 gradle -p lsposed :app:assembleRelease
 ```
 
+发布包由固定密钥签名，密钥以 base64 存在仓库 Secret `LSPOSED_KEYSTORE_B64`（配合 `LSPOSED_KEYSTORE_PASSWORD`、`LSPOSED_KEY_ALIAS`、`LSPOSED_KEY_PASSWORD`），CI 里解码到 `$RUNNER_TEMP/release.jks` 后通过环境变量 `KEYSTORE_PATH` 交给 Gradle。四个 Secret 缺失时才会退回 debug 签名（那样打出的包无法覆盖升级），CI 会给出警告。
+
 ## 安装
 
-1. 下载 `app-scheduler-lsposed-v1.5.6.apk`；
+1. 下载 `app-scheduler-lsposed-v1.5.7.apk`；
 2. 正常安装（授予 root 权限提示时允许）；
 3. LSPosed 管理器 → 模块 → 启用「定时启动 App · LSPosed」→ 勾选作用域 **System UI**（`com.android.systemui`）；
 4. 重启手机（或重启 SystemUI）；
 5. 打开 App：填锁屏密码 → 点「新建启动计划」→ 选择应用 → 选触发方式与条件 → 保存；
 6. 回到列表确认「调度总开关」为开启（首次安装默认开启），需要时保存全局设置。
+
+> 签名说明：v1.5.6 及更早的包由 CI 现场生成的 debug 密钥签名，每次构建的证书都不一样，因此**跨版本无法覆盖安装**（会报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。从 v1.5.7 起改用仓库内固定发布密钥（存放在 GitHub Actions Secret 中），升级只需正常覆盖安装。如果你是 v1.5.6 或更早的用户，请卸载一次旧版（配置会丢，可先用「运行日志」或计划列表截图记下计划）再安装 v1.5.7，之后的版本就能直接升级了。
 
 ## 验证钩子是否生效
 

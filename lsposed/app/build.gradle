@@ -13,9 +13,23 @@ android {
         applicationId "com.appscheduler.lsposed"
         minSdk 26
         targetSdk 34
-        versionCode 12
-        versionName "1.5.6"
+        versionCode 13
+        versionName "1.5.7"
         vectorDrawables { useSupportLibrary = true }
+    }
+
+    signingConfigs {
+        // 固定发布签名：靠 CI 自动生成的 debug.keystore 每次运行都不一样，
+        // 会导致「每个版本的签名都不同、用户无法覆盖升级，只能卸载重装丢配置」。
+        // 密钥放在仓库 Secret 里，构建时解码到 KEYSTORE_PATH；没有配置时才退回 debug 签名。
+        if (System.getenv('KEYSTORE_PATH')) {
+            releaseKey {
+                storeFile file(System.getenv('KEYSTORE_PATH'))
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
+        }
     }
 
     buildTypes {
@@ -25,7 +39,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.debug
+            signingConfig System.getenv('KEYSTORE_PATH') ? signingConfigs.releaseKey : signingConfigs.debug
         }
     }
 
