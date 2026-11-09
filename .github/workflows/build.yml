@@ -22,7 +22,7 @@ jobs:
       zip_name: ${{ steps.prepare.outputs.zip_name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Read module.prop and prepare build vars
         id: prepare
