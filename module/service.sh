@@ -12,18 +12,18 @@ MODDIR=${0%/*}
 CONFIG_FILE="$MODDIR/config.sh"
 
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 缺少 config.sh，模块未启动" >> /data/local/tmp/app_scheduler.log
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 缺少 config.sh，模块未启动" >> /data/local/tmp/apptimer.log
     exit 1
 fi
 
 # 先加载配置，才能拿到日志路径与等待时间
 . "$CONFIG_FILE"
 
-LOG_FILE=${LOG_FILE:-/data/local/tmp/app_scheduler.log}
+LOG_FILE=${LOG_FILE:-/data/local/tmp/apptimer.log}
 WAIT_BOOT_EXTRA=${WAIT_BOOT_EXTRA:-5}
 ENABLE_NOTIFY=${ENABLE_NOTIFY:-0}
 NOTIFY_TITLE=${NOTIFY_TITLE:-定时启动 App}
-NOTIFY_TAG=${NOTIFY_TAG:-app_scheduler}
+NOTIFY_TAG=${NOTIFY_TAG:-apptimer}
 
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null
 

@@ -1,4 +1,4 @@
-# AppTimer —— 开发文档
+# 定时启动 App —— 开发文档
 
 文档版本：v1.4
 目标设备：小米机型，HyperOS 2，Android 15，已 Root（Magisk / KernelSU）
@@ -209,7 +209,7 @@ git push origin v1.4
 
 触发：push `lsposed`、`lsposed-v*` 标签、`workflow_dispatch`。
 
-步骤：JDK 17 → Gradle（`gradle/actions/setup-gradle`）→ `gradle -p lsposed :app:assembleDebug` → 重命名产物为 `apptimer-lsposed-<version>.apk` → 上传 artifact → 标签时发布 Release。
+步骤：JDK 17 → Gradle（`gradle/actions/setup-gradle`）→ `gradle -p lsposed :app:assembleDebug` → 重命名产物为 `app-scheduler-lsposed-<version>.apk` → 上传 artifact → 标签时发布 Release。
 
 ### 本地自查
 
@@ -236,8 +236,8 @@ cat /data/adb/modules/app_scheduler/crontab_dir/root
 ### 6.3 查看日志
 
 ```bash
-cat /data/local/tmp/app_scheduler.log
-ls -l /data/local/tmp/app_scheduler.log*
+cat /data/local/tmp/apptimer.log
+ls -l /data/local/tmp/apptimer.log*
 ```
 
 ### 6.4 手动触发

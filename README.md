@@ -151,11 +151,11 @@ su -c sh /data/adb/modules/app_scheduler/service.sh
 | `MANUAL_UNLOCK_FALLBACK` | `1` | 自动解锁失败后是否等用户手动解锁再启动（`1` 开 / `0` 关） |
 | `MANUAL_UNLOCK_WAIT` | `180` | 等待手动解锁的最长秒数，超时放弃本次任务 |
 | `MANUAL_UNLOCK_POLL` | `3` | 等待期间的锁屏状态轮询间隔（秒） |
-| `LOG_FILE` | `/data/local/tmp/app_scheduler.log` | 日志路径 |
+| `LOG_FILE` | `/data/local/tmp/apptimer.log` | 日志路径 |
 | `LOG_MAX_SIZE` | `1048576` | 单份日志上限（字节） |
 | `LOG_MAX_ROTATIONS` | `1` | 保留旧日志份数，`0` 表示不留 |
 | `ENABLE_NOTIFY` | `1` | 失败通知开关 |
-| `NOTIFY_TITLE` / `NOTIFY_TAG` | `AppTimer` / `app_scheduler` | 通知标题与标签 |
+| `NOTIFY_TITLE` / `NOTIFY_TAG` | `AppTimer` / `apptimer` | 通知标题与标签 |
 | `AUTO_LOCK` | `0` | 启动后无操作是否自动熄屏上锁（`1` 开 / `0` 关） |
 | `AUTO_LOCK_DELAY` | `5` | 无操作多少秒后锁屏（2–600） |
 | `TIMER_MODE` | `cron` | 计时方式：`cron`=crond 驱动；`internal`=模块自己的计时循环 |
@@ -192,8 +192,8 @@ ps -A | grep crond
 cat /data/adb/modules/app_scheduler/crontab_dir/root
 
 # 看日志与轮转情况
-cat /data/local/tmp/app_scheduler.log
-ls -l /data/local/tmp/app_scheduler.log*
+cat /data/local/tmp/apptimer.log
+ls -l /data/local/tmp/apptimer.log*
 
 # 锁屏字段自检（不同 ROM 字段不同）
 dumpsys window policy | grep -i keyguard

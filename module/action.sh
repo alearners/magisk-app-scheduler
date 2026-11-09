@@ -12,5 +12,5 @@ sh "$MODDIR/run_app.sh"
 RC=$?
 
 echo "执行结束，返回码 $RC"
-echo "日志：/data/local/tmp/app_scheduler.log"
+echo "日志：/data/local/tmp/apptimer.log"
 exit "$RC"
