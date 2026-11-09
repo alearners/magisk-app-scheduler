@@ -37,6 +37,12 @@ public class TaskRunner {
     /** 单条 su 命令的超时秒数 */
     private static final int SU_TIMEOUT_SEC = 20;
 
+    private static final String CHANNEL_ID = "scheduler";
+    /** 通知投递专用线程：任何一次 binder 卡顿都不允许阻塞执行链 */
+    private static final java.util.concurrent.ExecutorService NOTIFY_POOL =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+    private static volatile boolean channelReady = false;
+
     private static final int SLIDE_START_PERCENT = 80;
     private static final int SLIDE_END_PERCENT = 25;
     private static final int SLIDE_DURATION_MS = 300;
@@ -169,12 +175,40 @@ public class TaskRunner {
     }
 
     public static boolean isLocked() {
-        Result r = su("dumpsys window policy | grep -E 'isKeyguardShowing|mKeyguardShowing|keyguardShowing|mShowingLockscreen' | head -n 1");
-        // 输出为空说明 dumpsys 失败，此时按「锁着」处理更安全：宁可多走一次解锁流程，也不要盲启应用
-        if (r.timeout || r.out.trim().isEmpty()) {
-            return true;
+        // 不同 ROM 把锁屏状态打在不同的 dumpsys 段里：AOSP / HyperOS 只在 `dumpsys window` 里给
+        // isKeyguardShowing，部分机型只在 `dumpsys window policy` 里给 mKeyguardShowing。
+        // 实测 HyperOS 3（Android 15）的 `dumpsys window policy` 根本没有 isKeyguardShowing 这一行，
+        // 旧实现拿到空输出后按「锁着」兜底，结果明明已经解锁也一律走「等手动解锁」分支，永远不直启。
+        Boolean byWindow = readKeyguard("dumpsys window | grep -m1 isKeyguardShowing=");
+        if (byWindow != null) {
+            return byWindow;
         }
-        return r.out.contains("=true");
+        Boolean byPolicy = readKeyguard("dumpsys window policy | grep -m1 -E 'isKeyguardShowing=|mKeyguardShowing=|mShowingLockscreen='");
+        if (byPolicy != null) {
+            return byPolicy;
+        }
+        // 两处都拿不到（su 失败 / 命令超时 / 段被裁掉）时按「锁着」处理更安全：
+        // 宁可多走一次解锁流程，也不要盲启应用
+        return true;
+    }
+
+    /** 读一处锁屏状态；拿不到结果时返回 null，交给下一种探测方式 */
+    private static Boolean readKeyguard(String cmd) {
+        Result r = su(cmd);
+        if (r.timeout) {
+            return null;
+        }
+        String out = r.out.trim();
+        if (out.isEmpty()) {
+            return null;
+        }
+        if (out.contains("=true")) {
+            return Boolean.TRUE;
+        }
+        if (out.contains("=false")) {
+            return Boolean.FALSE;
+        }
+        return null;
     }
 
     /**
@@ -287,45 +321,67 @@ public class TaskRunner {
         return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA).format(new Date());
     }
 
-    public static void notifyManualUnlock(Context context, int waitSec) {
-        try {
-            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm == null) {
-                return;
+    public static void notifyManualUnlock(Context context, final int waitSec) {
+        // 通知只是附带提示：createNotificationChannel / notify 都是会跟系统服务排队、可能长时间不返回的
+        // binder 调用（真机上实测过一次卡住约 3 分钟），放在执行线程里会把整条任务链一起拖死。
+        // 因此一律丢到独立线程做尽力而为的投递，主流程立刻继续。
+        final Context app = context.getApplicationContext();
+        NOTIFY_POOL.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    NotificationManager nm = (NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE);
+                    if (nm == null) {
+                        return;
+                    }
+                    ensureChannel(nm);
+                    Notification.Builder builder = new Notification.Builder(app, CHANNEL_ID)
+                            .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+                            .setContentTitle("请手动解锁")
+                            .setContentText("解锁后将在 " + waitSec + " 秒内自动启动 App")
+                            .setAutoCancel(true);
+                    nm.notify(2002, builder.build());
+                } catch (Throwable ignored) {
+                    // 通知失败不影响主流程
+                }
             }
-            NotificationChannel channel = new NotificationChannel(
-                    "scheduler", "定时启动 App", NotificationManager.IMPORTANCE_HIGH);
-            nm.createNotificationChannel(channel);
-            Notification.Builder builder = new Notification.Builder(context, "scheduler")
-                    .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-                    .setContentTitle("请手动解锁")
-                    .setContentText("解锁后将在 " + waitSec + " 秒内自动启动 App")
-                    .setAutoCancel(true);
-            nm.notify(2002, builder.build());
-        } catch (Throwable ignored) {
-            // 通知失败不影响主流程
-        }
+        });
     }
 
-    public static void notifyFailure(Context context, String text) {
-        try {
-            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm == null) {
-                return;
+    public static void notifyFailure(Context context, final String text) {
+        final Context app = context.getApplicationContext();
+        NOTIFY_POOL.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    NotificationManager nm = (NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE);
+                    if (nm == null) {
+                        return;
+                    }
+                    ensureChannel(nm);
+                    String[] lines = text.split("\n");
+                    String last = lines.length > 0 ? lines[lines.length - 1] : "执行失败";
+                    Notification.Builder builder = new Notification.Builder(app, CHANNEL_ID)
+                            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                            .setContentTitle("定时启动 App 执行失败")
+                            .setContentText(last)
+                            .setAutoCancel(true);
+                    nm.notify(2001, builder.build());
+                } catch (Throwable ignored) {
+                    // 通知失败不影响主流程
+                }
             }
-            NotificationChannel channel = new NotificationChannel(
-                    "scheduler", "定时启动 App", NotificationManager.IMPORTANCE_DEFAULT);
-            nm.createNotificationChannel(channel);
-            String[] lines = text.split("\n");
-            String last = lines.length > 0 ? lines[lines.length - 1] : "执行失败";
-            Notification.Builder builder = new Notification.Builder(context, "scheduler")
-                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                    .setContentTitle("定时启动 App 执行失败")
-                    .setContentText(last)
-                    .setAutoCancel(true);
-            nm.notify(2001, builder.build());
-        } catch (Throwable ignored) {
-            // 通知失败不影响主流程
+        });
+    }
+
+    /** 通知渠道只建一次，避免每次失败都走一遍 binder */
+    private static void ensureChannel(NotificationManager nm) {
+        if (channelReady) {
+            return;
         }
+        NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID, "定时启动 App", NotificationManager.IMPORTANCE_HIGH);
+        nm.createNotificationChannel(channel);
+        channelReady = true;
     }
 }

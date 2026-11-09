@@ -7,7 +7,9 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import java.util.concurrent.Executors
 
 /**
@@ -31,6 +33,7 @@ class RunService : Service() {
         }
         val action = intent?.action
         val taskId = intent?.getLongExtra(EXTRA_TASK_ID, 0L) ?: 0L
+        scheduleWatchdog(startId)
         POOL.execute {
             try {
                 when (action) {
@@ -41,12 +44,40 @@ class RunService : Service() {
             } catch (t: Throwable) {
                 LogStore.append(this, "前台服务执行异常: $t")
             } finally {
+                cancelWatchdog()
                 stopForegroundRun()
                 stopSelf(startId)
             }
         }
         return START_NOT_STICKY
     }
+
+    /**
+     * 兜底看门狗：随时可能被 su 授权弹窗、系统服务响应慢拖住，
+     * 真机上实测过一次执行链卡住约 3 分钟、前台通知一直不消失。
+     * 超过 [WATCHDOG_SEC] 秒仍没跑完就强制摘掉前台通知并结束服务，
+     * 让系统与用户都不会看到一个永远「正在执行」的通知。
+     */
+    private fun scheduleWatchdog(startId: Int) {
+        val handler = Handler(Looper.getMainLooper())
+        val runnable = Runnable {
+            LogStore.append(this, "执行超过 ${WATCHDOG_SEC} 秒仍未结束，强制结束前台服务\n")
+            stopForegroundRun()
+            stopSelf(startId)
+        }
+        watchdogHandler = handler
+        watchdogRunnable = runnable
+        handler.postDelayed(runnable, WATCHDOG_SEC * 1000L)
+    }
+
+    private fun cancelWatchdog() {
+        watchdogRunnable?.let { watchdogHandler?.removeCallbacks(it) }
+        watchdogRunnable = null
+        watchdogHandler = null
+    }
+
+    private var watchdogHandler: Handler? = null
+    private var watchdogRunnable: Runnable? = null
 
     private fun stopForegroundRun() {
         try {
@@ -93,6 +124,9 @@ class RunService : Service() {
 
         private const val CHANNEL_ID = "scheduler_run"
         private const val NOTIFICATION_ID = 2003
+
+        /** 单次执行的最长存活时间（秒），超过就强制收尾 */
+        private const val WATCHDOG_SEC = 180
 
         /** 串行执行，避免多个计划同时抢 su 与屏幕 */
         private val POOL = Executors.newSingleThreadExecutor()

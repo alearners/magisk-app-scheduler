@@ -105,13 +105,14 @@ Java 侧只保留执行与钩子（`TaskRunner` / `XposedEntry` / `Config` / `Lo
 2. **调度**：`Scheduler` 为每个计划单独排一个 `PendingIntent`（请求码固定，用 `appschedule://task/<id>` 作为 data 区分，避免 id 相差 900 时互相覆盖），用 `setExactAndAllowWhileIdle`；无精确闹钟权限时降级 `setAndAllowWhileIdle`；`BootReceiver` 开机重排。
 3. **执行载体**：闹钟与解锁广播都不自己干活，只负责把活交给 `RunService`（前台服务，`specialUse` 类型）。前台服务有进程优先级、不受广播接收器约 10 秒窗口限制；系统若拒绝后台启动前台服务，则退化为接收器里起线程执行，两条路都不会长时间阻塞广播。
 4. **条件**：`RunCoordinator.executeTask` 先过 `ConditionChecker`（充电 / WiFi / 屏幕熄灭），不满足则记日志并直接排下一次。
-5. **解锁与启动**：`TaskRunner` 通过 `su -c`（每条命令 20 秒超时）依次执行 `pm list packages` 校验（逐行精确比对，避免包名互为前缀时误判）、`input keyevent 224` 唤醒、广播收起锁屏、`wm dismiss-keyguard`、上滑 + `input text` + 回车，然后对每个应用 `am force-stop` + `monkey` → 解析 Activity 后 `am start`。解锁只做一次，整个计划共享。
+5. **解锁与启动**：`TaskRunner` 通过 `su -c`（每条命令 20 秒超时）依次执行 `pm list packages` 校验（逐行精确比对，避免包名互为前缀时误判）、`input keyevent 224` 唤醒、广播收起锁屏、`wm dismiss-keyguard`、上滑 + `input text` + 回车，然后对每个应用 `am force-stop` + `monkey` → 解析 Activity 后 `am start`。解锁只做一次，整个计划共享。锁屏状态先读 `dumpsys window` 的 `isKeyguardShowing`，读不到再退回 `dumpsys window policy` 的 `mKeyguardShowing`（HyperOS 的 `window policy` 段没有前者，只查那一处会把「已解锁」误判成「锁屏中」），两处都读不到时才按锁屏处理。
 6. **手动解锁兜底**：自动解锁仍失败且开关打开时，把本次要启动的包写入 `PendingStore`、发通知「请手动解锁」（Android 13+ 首次启动时申请通知权限），再排一个截止闹钟；随后**立刻返回，不占用任何广播窗口**。用户解锁后系统发 `USER_PRESENT`，`UnlockReceiver` 接管并送去前台服务启动 App；到截止时间仍未解锁，由超时闹钟清理条目并发失败通知。
 7. **钩子**：`XposedEntry` 只作用于 `com.android.systemui`：
    - 挂钩 `Application.onCreate`，在其中注册 `com.appscheduler.action.DISMISS_KEYGUARD` 广播接收器；该接收器要求发送方持有 `com.appscheduler.permission.DISMISS_KEYGUARD`（signature 级别），第三方 App 无法伪造「收起锁屏」广播；
    - 挂钩 `com.android.systemui.keyguard.KeyguardViewMediator` 的构造函数捕获实例；
    - 收到广播后按候选方法列表反射调用：`dismissKeyguard()` → `handleHideKeyguard(boolean)` → `handleHideKeyguard(boolean, boolean)` → `setShowingLocked(false, true)` → `hideKeyguard()`，先找本类声明的方法、再找继承来的，逐个尝试并在 LSPosed 日志中记录结果。
 8. **精确闹钟**：系统未授予「闹钟与提醒」权限时，计划列表的全局设置卡会直接显示提示与跳转入口，调度自动降级为非精确。
+9. **不会卡死**：通知的建渠道与发送全部丢到独立线程做尽力投递，执行链不等 binder；前台服务另有 180 秒看门狗，超时强制摘除通知并收尾，不会留下「正在执行」的永久通知。
 
 ## 构建
 
@@ -122,7 +123,7 @@ Java 侧只保留执行与钩子（`TaskRunner` / `XposedEntry` / `Config` / `Lo
 git push origin lsposed
 
 # 或者打标签发布 Release
-git tag lsposed-v1.5.5 && git push origin lsposed-v1.5.5
+git tag lsposed-v1.5.6 && git push origin lsposed-v1.5.6
 ```
 
 本地等价命令（需要本机 Android SDK）：
@@ -133,7 +134,7 @@ gradle -p lsposed :app:assembleRelease
 
 ## 安装
 
-1. 下载 `app-scheduler-lsposed-v1.5.5.apk`；
+1. 下载 `app-scheduler-lsposed-v1.5.6.apk`；
 2. 正常安装（授予 root 权限提示时允许）；
 3. LSPosed 管理器 → 模块 → 启用「定时启动 App · LSPosed」→ 勾选作用域 **System UI**（`com.android.systemui`）；
 4. 重启手机（或重启 SystemUI）；

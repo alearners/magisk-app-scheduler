@@ -224,6 +224,7 @@ sh scripts/package.sh          # 生成 build/app_scheduler-v1.4.zip，与 CI �
 
 | 版本 | versionCode | 变更 |
 | --- | --- | --- |
+| lsposed v1.5.6 | 12 | 锁屏检测改为先读 `dumpsys window` 的 `isKeyguardShowing`、再退回 `window policy` 的 `mKeyguardShowing`（HyperOS 上原来永远误判为锁屏，已解锁也走「等手动解锁」）、通知建渠道与发送移到独立线程不再阻塞执行链、前台服务加 180 秒看门狗防止通知残留 |
 | lsposed v1.5.5 | 11 | 定时触发前再校验一次调度总开关（关掉后残留闹钟不会把 App 拉起）、计划数据补纯 JVM 回归测试并在 CI 打包前先跑 |
 | lsposed v1.5.4 | 10 | 挂起等待手动解锁时仍排好下一次触发（不再因一次锁屏把计划停摆）、等待超时或计划被关闭时按失败记账并重排、无 root 时给明确提示、前台服务通知失败不再崩溃退化为普通服务、重启后清理残留待启动队列 |
 | lsposed v1.5.3 | 9 | 编辑计划不再重置「剩余次数」（仅改动总次数时才重置）、计划 JSON 里的空 `times` 数组如实还原不再退回 08:00、调度总开关首次安装默认开启、仓库内脚本补可执行位、`.gitignore` 补 Paparazzi 快照目录 |
