@@ -39,6 +39,12 @@ object RunCoordinator {
             Scheduler.cancel(context, task.id)
             return
         }
+        if (!Config.get(context).enabled()) {
+            // 总开关关掉后本不该再有闹钟；这里再挡一次，避免残留闹钟把 App 拉起来
+            Scheduler.cancel(context, task.id)
+            LogStore.append(context, "调度总开关已关闭，本次不执行「${task.title()}」\n")
+            return
+        }
 
         val log = StringBuilder()
         log.append("=== 定时触发 ${TaskRunner.stamp()}（${task.title()}） ===\n")
