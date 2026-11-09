@@ -73,4 +73,6 @@ dependencies {
     compileOnly project(':xposed-api-stub')
 
     testImplementation 'junit:junit:4.13.2'
+    // 单元测试跑在 JVM 上，Android 提供的 org.json 只是空壳，必须换成真实实现
+    testImplementation 'org.json:json:20240303'
 }

@@ -59,6 +59,12 @@ gradle -p lsposed :app:recordPaparazziDebug
 
 场景定义在 `app/src/test/java/com/appscheduler/lsposed/ScreenshotTest.kt`：构造三个样例计划（按时间点 / 按间隔循环 + 次数 / 按星期且停用）、两份计划编辑页、一份已选两个应用的列表、一段含条件跳过与手动解锁兜底的日志。渲染时固定 `dynamicColor = false`，确保截图呈现上面这套青蓝配色而不受布局库取色影响。
 
+计划数据的存读另有一组纯 JVM 回归测试（`TaskItemTest`，真实 `org.json` 走序列化往返），CI 在打包前会先跑它：
+
+```bash
+gradle -p lsposed :app:testDebugUnitTest --tests 'com.appscheduler.lsposed.TaskItemTest'
+```
+
 对应文件：
 
 ```

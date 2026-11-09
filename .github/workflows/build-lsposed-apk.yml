@@ -42,6 +42,11 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Unit tests (plan data)
+        run: |
+          gradle -p lsposed :app:testDebugUnitTest --no-daemon --stacktrace \
+            --tests 'com.appscheduler.lsposed.TaskItemTest'
+
       - name: Build APK
         run: |
           gradle -p lsposed :app:assembleRelease --no-daemon --stacktrace --warning-mode all
