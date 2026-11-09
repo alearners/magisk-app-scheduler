@@ -35,18 +35,21 @@ data class TaskItem(
         return if (packages.size <= 1) first else "$first 等 ${packages.size} 个"
     }
 
-    fun describeSchedule(): String = when (scheduleType) {
-        TYPE_WEEKLY -> {
-            val days = if (weekdays.isEmpty()) "每天"
-            else "每" + weekdays.sorted().joinToString("、") { weekdayName(it) }
-            "$days ${times.firstOrNull() ?: "08:00"}"
-        }
-        TYPE_INTERVAL -> {
+    fun describeSchedule(): String {
+        if (scheduleType == TYPE_INTERVAL) {
             val base = if (intervalMinutes % 60 == 0 && intervalMinutes >= 60)
                 "每 ${intervalMinutes / 60} 小时" else "每 $intervalMinutes 分钟"
-            if (maxRuns > 0) "$base（共 $maxRuns 次，剩 $remainingRuns 次）" else base
+            return if (maxRuns > 0) "$base（共 $maxRuns 次，剩 $remainingRuns 次）" else base
         }
-        else -> "每天 " + times.joinToString("、")
+        if (times.isEmpty()) {
+            return "未设定时间点"
+        }
+        if (scheduleType == TYPE_WEEKLY) {
+            val days = if (weekdays.isEmpty()) "每天"
+            else "每" + weekdays.sorted().joinToString("、") { weekdayName(it) }
+            return "$days ${times.first()}"
+        }
+        return "每天 " + times.joinToString("、")
     }
 
     fun describeConditions(): String {
@@ -105,7 +108,8 @@ data class TaskItem(
             }
             task.scheduleType = o.optString("scheduleType", TYPE_TIMES)
             val tm = o.optJSONArray("times")
-            if (tm != null && tm.length() > 0) {
+            if (tm != null) {
+                // 空数组也要照实还原：用户把时间点全删掉时，不应悄悄退回默认 08:00
                 task.times.clear()
                 for (i in 0 until tm.length()) {
                     val item = tm.optString(i, "")

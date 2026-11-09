@@ -224,6 +224,7 @@ sh scripts/package.sh          # 生成 build/app_scheduler-v1.4.zip，与 CI �
 
 | 版本 | versionCode | 变更 |
 | --- | --- | --- |
+| lsposed v1.5.3 | 9 | 编辑计划不再重置「剩余次数」（仅改动总次数时才重置）、计划 JSON 里的空 `times` 数组如实还原不再退回 08:00、调度总开关首次安装默认开启、仓库内脚本补可执行位、main 分支 `.gitignore` 补 Paparazzi 快照目录 |
 | lsposed v1.5.2 | 8 | 执行载体改为前台服务 `RunService`（不再依赖广播窗口长时间执行）、手动解锁兜底改为 `USER_PRESENT` 事件驱动 + 超时闹钟、每条 `su` 命令 20 秒超时、`dumpsys` 无输出按锁屏处理、UI 增加精确闹钟权限提示 |
 | lsposed v1.5.1 | 7 | 收起锁屏广播改为同签名权限保护（第三方 App 无法伪造解锁）、Android 13+ 申请通知权限、`pm list packages` 精确比对、`PendingIntent` 用 data URI 区分计划、计划数据损坏时保留备份、`su` 候选方法补继承查找 |
 | lsposed v1.5 | 6 | 应用选择器、多 App 单计划、多计划并存、三种定时方式、循环次数、启动条件（仅充电 / 仅 WiFi / 仅熄屏） |

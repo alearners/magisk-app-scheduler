@@ -228,7 +228,13 @@ fun TaskEditScreen(
                 onValueChange = { text ->
                     maxRunsText = text
                     val value = text.toIntOrNull() ?: 0
-                    onChange(task.copy(maxRuns = value, remainingRuns = value))
+                    // 只有「总次数」真的被改动时才重置剩余次数；否则每次进编辑页都会把进度抹掉
+                    val remaining = when {
+                        value <= 0 -> 0
+                        value == task.maxRuns -> task.remainingRuns.coerceIn(0, value)
+                        else -> value
+                    }
+                    onChange(task.copy(maxRuns = value, remainingRuns = remaining))
                 },
                 label = { Text("总共执行次数") },
                 supportingText = { Text("填 0 表示不限次数；达到次数后计划自动停用") },

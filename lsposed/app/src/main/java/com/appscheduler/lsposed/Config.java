@@ -46,7 +46,8 @@ public class Config {
     }
 
     public boolean enabled() {
-        return sp.getBoolean(KEY_ENABLED, false);
+        // 首次安装默认开启总开关：计划本身仍要用户手动创建，这里只表示「到点时是否执行」
+        return sp.getBoolean(KEY_ENABLED, true);
     }
 
     /**
