@@ -73,6 +73,24 @@ ui/Theme.kt             # Material3 配色 / 深色 / 动态取色
 
 Java 侧只保留执行与钩子（`TaskRunner` / `XposedEntry` / `Config` / `LogStore`），注入 SystemUI 的钩子不依赖 Kotlin 运行时；调度、数据与界面均为 Kotlin。
 
+## 应用图标
+
+<p align="center"><img src="../docs/icon.png" width="132" alt="定时启动 App 应用图标"></p>
+
+一枚青蓝底色、白色圆环表盘的时钟：时针指 8 点、分针指 12 点，秒针斜指 4 点；四个方位用更深一档的青蓝小圆点作刻度。图形只靠轮廓与色块识别，缩小到 48dp 仍清晰，也不出现任何文字。
+
+资源按 Android 规范铺满五个密度：
+
+| 文件 | 用途 |
+| --- | --- |
+| `res/mipmap-*/ic_launcher.png` | 传统方形图标（48/72/96/144/192） |
+| `res/mipmap-*/ic_launcher_round.png` | 圆形启动器图标（同一套尺寸，圆形遮罩） |
+| `res/mipmap-*/ic_launcher_foreground.png` | 自适应图标前景（108/162/216/324/432，四周留 6% 边距，表盘落在 66dp 安全区内） |
+| `res/mipmap-anydpi-v26/ic_launcher.xml`、`ic_launcher_round.xml` | Android 8+ 自适应图标，前景 + `@color/ic_launcher_background` 纯色底 |
+| `res/values/colors.xml` | 图标底色 `#2297D5`，取自母图背景，避免与前景出现色差接缝 |
+
+图标母图（2048×2048）与切图流程都留在仓库外，重新生成只需把母图替换进切图脚本；`docs/icon.png` 是给 README 用的 512px 预览。
+
 ## 工作原理
 
 1. **数据**：每个计划是一个 `TaskItem`（应用列表、定时方式、星期、时间点、间隔、次数、条件、启用），整表以 JSON 存在 `SharedPreferences`（`TaskStore`）。
