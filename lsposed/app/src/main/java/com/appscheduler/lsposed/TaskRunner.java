@@ -9,17 +9,22 @@ import android.text.TextUtils;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 核心执行流程（与 Magisk 版 run_app.sh 等价，全部经 su 执行）：
  * 校验包 → 判断锁屏 → 唤醒 → 广播让 LSPosed 钩子收起 Keyguard
  * → wm dismiss-keyguard → 上滑 + 密码 → 校验 → 逐个启动计划里的 App。
- * 一个计划可以包含多个 App，解锁只做一次；自动解锁失败且开启兜底时，会等用户手动解锁。
+ * <p>
+ * 这里只负责「能同步做完的部分」：解锁最多尝试三种自动方式，一旦失败立刻返回，
+ * 不会在广播接收器里长时间等待——等待用户手动解锁交给 RunCoordinator 的全局解锁事件监听。
+ * 每条 su 命令都有超时，避免 Magisk 授权弹窗无人响应时把线程永久挂住。
  */
 public class TaskRunner {
 
@@ -29,75 +34,56 @@ public class TaskRunner {
     public static final String DISMISS_PERMISSION = "com.appscheduler.permission.DISMISS_KEYGUARD";
     public static final String SYSTEMUI_PKG = "com.android.systemui";
 
+    /** 单条 su 命令的超时秒数 */
+    private static final int SU_TIMEOUT_SEC = 20;
+
     private static final int SLIDE_START_PERCENT = 80;
     private static final int SLIDE_END_PERCENT = 25;
     private static final int SLIDE_DURATION_MS = 300;
 
-    private static class Result {
-        int code = -1;
-        String out = "";
+    public static class Result {
+        public int code = -1;
+        public String out = "";
+        public boolean timeout = false;
     }
 
     /**
-     * 执行一个计划。
+     * 校验包是否已安装。
      *
-     * @return 是否全部 App 都启动成功
+     * @return 可启动的包列表（未安装的会被写进日志并跳过）
      */
-    public static boolean run(Context context, List<String> packages) {
-        StringBuilder log = new StringBuilder();
-        Config config = Config.get(context);
-        String stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA).format(new Date());
-
-        if (packages == null || packages.isEmpty()) {
-            log.append("=== 开始执行 ").append(stamp).append(" ===\n");
-            log.append("计划里没有选择任何应用\n");
-            return finish(context, log, true);
-        }
-
-        log.append("=== 开始执行 ").append(stamp).append("（目标 ")
-                .append(TextUtils.join(", ", packages)).append("） ===\n");
-
-        if (!suAvailable()) {
-            log.append("未获得 root（su 不可用），无法执行\n");
-            return finish(context, log, true);
-        }
-
-        // 1. 校验安装并强制停止
+    public static List<String> validate(List<String> packages, StringBuilder log) {
         List<String> runnable = new ArrayList<>();
+        if (packages == null) {
+            return runnable;
+        }
         for (String pkg : packages) {
             if (TextUtils.isEmpty(pkg)) {
                 continue;
             }
             Result listed = su("pm list packages " + pkg);
+            if (listed.timeout) {
+                log.append("校验 ").append(pkg).append(" 超时（su 无响应），跳过\n");
+                continue;
+            }
             if (!hasPackage(listed.out, pkg)) {
                 log.append("未找到已安装的包: ").append(pkg).append('\n');
                 continue;
             }
-            su("am force-stop " + pkg);
-            log.append("已强制停止 ").append(pkg).append('\n');
             runnable.add(pkg);
         }
-        if (runnable.isEmpty()) {
-            log.append("没有任何可启动的包，放弃本次任务\n");
-            return finish(context, log, true);
-        }
+        return runnable;
+    }
 
-        // 2. 锁屏处理（整个计划只做一次）
-        if (isLocked()) {
-            log.append("锁屏状态: true\n");
-            if (!unlock(context, config, log)) {
-                return finish(context, log, true);
-            }
-        } else {
-            log.append("锁屏状态: false，直接启动\n");
-        }
-
-        // 3. 逐个启动：monkey → 解析 Activity 后 am start
+    /** 强制停止并逐个启动，解锁已在此之前完成 */
+    public static boolean launch(List<String> runnable, StringBuilder log) {
         boolean allOk = true;
         for (String pkg : runnable) {
-            boolean ok = false;
+            su("am force-stop " + pkg);
+            log.append("已强制停止 ").append(pkg).append('\n');
+
             Result monkey = su("monkey -p " + pkg + " -c android.intent.category.LAUNCHER 1");
-            ok = monkey.code == 0;
+            boolean ok = monkey.code == 0;
             if (ok) {
                 log.append("已通过 monkey 启动 ").append(pkg).append('\n');
             } else {
@@ -116,12 +102,14 @@ public class TaskRunner {
             }
             sleep(600);
         }
-
-        return finish(context, log, !allOk);
+        return allOk;
     }
 
-    /** @return 解锁是否成功 */
-    private static boolean unlock(Context context, Config config, StringBuilder log) {
+    /**
+     * 自动解锁：钩子广播 → wm dismiss-keyguard → 上滑 + 密码。
+     * 三种都失败时直接返回 false，不做等待。
+     */
+    public static boolean unlock(Context context, Config config, StringBuilder log) {
         su("input keyevent 224");
         sleep(800);
         log.append("已唤醒屏幕\n");
@@ -170,73 +158,76 @@ public class TaskRunner {
             log.append("密码注入后已解锁\n");
             return true;
         }
-
-        // 4. 手动解锁兜底
         log.append("自动解锁失败，keyguard 仍然显示\n");
-        if (!config.manualFallback()) {
-            log.append("未开启手动解锁兜底，放弃本次任务\n");
-            return false;
-        }
-        int waitSec = config.manualWait();
-        log.append("已启用手动解锁兜底：最多等待 ").append(waitSec)
-                .append(" 秒，用户解锁后立即启动\n");
-        notifyManualUnlock(context, waitSec);
-
-        long deadline = System.currentTimeMillis() + waitSec * 1000L;
-        while (System.currentTimeMillis() < deadline) {
-            sleep(3000);
-            if (!isLocked()) {
-                log.append("检测到用户已手动解锁，继续启动 App\n");
-                sleep(1200);
-                return true;
-            }
-        }
-        log.append("等待手动解锁超时（").append(waitSec).append(" 秒），放弃本次任务\n");
         return false;
     }
 
-    private static boolean finish(Context context, StringBuilder log, boolean failed) {
-        String text = log.toString();
-        LogStore.append(context, text);
-        if (failed) {
-            notifyFailure(context, text);
-        }
-        return !failed;
-    }
-
-    private static boolean suAvailable() {
+    /** su 是否可用（只做一次轻量探测） */
+    public static boolean suAvailable() {
         Result r = su("id");
         return r.code == 0 && r.out.contains("uid=0");
     }
 
-    private static Result su(String command) {
-        Result r = new Result();
+    public static boolean isLocked() {
+        Result r = su("dumpsys window policy | grep -E 'isKeyguardShowing|mKeyguardShowing|keyguardShowing|mShowingLockscreen' | head -n 1");
+        // 输出为空说明 dumpsys 失败，此时按「锁着」处理更安全：宁可多走一次解锁流程，也不要盲启应用
+        if (r.timeout || r.out.trim().isEmpty()) {
+            return true;
+        }
+        return r.out.contains("=true");
+    }
+
+    /**
+     * 执行一条 su 命令。读流放在独立线程，主线程只看超时，因此命令卡住不会把调用方永久阻塞。
+     */
+    public static Result su(String command) {
+        final Result r = new Result();
         Process process = null;
+        final StringBuilder sb = new StringBuilder();
+        Thread reader = null;
         try {
             process = new ProcessBuilder("su", "-c", command).redirectErrorStream(true).start();
-            StringBuilder sb = new StringBuilder();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line).append('\n');
+            final Process p = process;
+            reader = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try (BufferedReader br = new BufferedReader(
+                            new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                        String line;
+                        while ((line = br.readLine()) != null) {
+                            sb.append(line).append('\n');
+                        }
+                    } catch (Throwable ignored) {
+                        // 进程被杀时读流会抛异常，输出已拿到的部分即可
+                    }
+                }
+            }, "su-reader");
+            reader.setDaemon(true);
+            reader.start();
+
+            if (!process.waitFor(SU_TIMEOUT_SEC, TimeUnit.SECONDS)) {
+                r.timeout = true;
+                r.code = -2;
+                r.out = sb.toString();
+                return r;
             }
-            r.code = process.waitFor();
+            reader.join(1500);
+            r.code = process.exitValue();
             r.out = sb.toString();
         } catch (Exception e) {
             r.code = -1;
             r.out = "执行失败: " + e;
         } finally {
-            if (process != null) {
-                process.destroy();
+            if (process != null && reader != null && reader.isAlive()) {
+                try {
+                    process.destroyForcibly();
+                } catch (Throwable ignored) {
+                }
             }
         }
         return r;
     }
 
-    /**
-     * `pm list packages &lt;pkg&gt;` 是按子串过滤的，com.foo 会连 com.foobar 一起列出，
-     * 因此必须逐行精确比对，不能直接 contains。
-     */
     private static boolean hasPackage(String output, String pkg) {
         if (output == null) {
             return false;
@@ -248,11 +239,6 @@ public class TaskRunner {
             }
         }
         return false;
-    }
-
-    private static boolean isLocked() {
-        Result r = su("dumpsys window policy | grep -E 'isKeyguardShowing|mKeyguardShowing|keyguardShowing|mShowingLockscreen' | head -n 1");
-        return r.out.contains("=true");
     }
 
     private static int[] screenSize() {
@@ -289,7 +275,7 @@ public class TaskRunner {
         return null;
     }
 
-    private static void sleep(long millis) {
+    public static void sleep(long millis) {
         try {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
@@ -297,7 +283,11 @@ public class TaskRunner {
         }
     }
 
-    private static void notifyManualUnlock(Context context, int waitSec) {
+    public static String stamp() {
+        return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA).format(new Date());
+    }
+
+    public static void notifyManualUnlock(Context context, int waitSec) {
         try {
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) {
@@ -317,7 +307,7 @@ public class TaskRunner {
         }
     }
 
-    private static void notifyFailure(Context context, String text) {
+    public static void notifyFailure(Context context, String text) {
         try {
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) {

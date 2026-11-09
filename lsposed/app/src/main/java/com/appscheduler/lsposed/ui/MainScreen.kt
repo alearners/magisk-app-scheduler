@@ -1,6 +1,10 @@
 package com.appscheduler.lsposed.ui
 
+import android.app.AlarmManager
 import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -18,7 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.appscheduler.lsposed.Config
 import com.appscheduler.lsposed.LogStore
-import com.appscheduler.lsposed.TaskRunner
+import com.appscheduler.lsposed.RunCoordinator
 import com.appscheduler.lsposed.model.TaskItem
 import com.appscheduler.lsposed.schedule.Scheduler
 import com.appscheduler.lsposed.store.TaskStore
@@ -104,7 +108,7 @@ fun MainScreen() {
         if (runningId != null) return
         runningId = task.id
         scope.launch {
-            withContext(Dispatchers.IO) { TaskRunner.run(context, task.packages) }
+            withContext(Dispatchers.IO) { RunCoordinator.runNow(context, task.packages) }
             runningId = null
             reload()
             toast("执行完成，详见运行日志")
@@ -113,6 +117,20 @@ fun MainScreen() {
 
     val nextRunText = remember(tasks, masterEnabled) {
         describeSoonest(context, tasks, masterEnabled)
+    }
+
+    val exactAlarmGranted = remember {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            true
+        } else {
+            // 在 Paparazzi/layoutlib 里这个调用不可用，异常时按「已授予」处理，避免截图与实际不符
+            try {
+                val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+                am?.canScheduleExactAlarms() ?: true
+            } catch (t: Throwable) {
+                true
+            }
+        }
     }
 
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { innerPadding ->
@@ -150,7 +168,19 @@ fun MainScreen() {
                     manualWait = manualWait,
                     onManualWaitChange = { manualWait = it },
                     onSaveSettings = { saveSettings() },
-                    onOpenLog = { screen = Screen.LOG }
+                    onOpenLog = { screen = Screen.LOG },
+                    exactAlarmGranted = exactAlarmGranted,
+                    onRequestExactAlarm = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            try {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                                )
+                            } catch (t: Throwable) {
+                                toast("无法打开系统设置，请手动授予「闹钟与提醒」权限")
+                            }
+                        }
+                    }
                 )
 
                 Screen.EDIT -> TaskEditScreen(

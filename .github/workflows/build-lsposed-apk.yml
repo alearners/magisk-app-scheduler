@@ -38,7 +38,7 @@ jobs:
           "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.7'
 
@@ -67,7 +67,7 @@ jobs:
           unzip -p "$APK_NAME" assets/xposed_init
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifact.outputs.apk_name }}
           path: |
@@ -77,7 +77,7 @@ jobs:
 
       - name: Publish release (tag only)
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ steps.artifact.outputs.apk_name }}
           tag_name: ${{ github.ref_name }}

@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- 只有与本 APK 同签名的应用才能发送「收起锁屏」广播，防止任意第三方 App 触发解锁 -->
     <permission
@@ -36,6 +38,24 @@
         <receiver
             android:name=".schedule.AlarmReceiver"
             android:exported="false" />
+
+        <!-- 用户解锁后继续执行「自动解锁失败而挂起」的计划；USER_PRESENT 是系统广播，非导出即可收到 -->
+        <receiver
+            android:name=".schedule.UnlockReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.USER_PRESENT" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".RunService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="按计划执行自动解锁与启动 App，并承接用户手动解锁后的后续启动" />
+        </service>
 
         <receiver
             android:name=".schedule.BootReceiver"

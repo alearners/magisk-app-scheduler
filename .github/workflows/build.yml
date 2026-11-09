@@ -93,7 +93,7 @@ jobs:
           ls -lh "$ZIP_NAME"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.prepare.outputs.zip_name }}
           path: |
@@ -103,7 +103,7 @@ jobs:
 
       - name: Publish release (tag only)
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ steps.prepare.outputs.zip_name }}
           tag_name: ${{ github.ref_name }}

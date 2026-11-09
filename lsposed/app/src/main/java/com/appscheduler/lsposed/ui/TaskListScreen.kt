@@ -52,7 +52,9 @@ fun TaskListScreen(
     manualWait: String,
     onManualWaitChange: (String) -> Unit,
     onSaveSettings: () -> Unit,
-    onOpenLog: () -> Unit
+    onOpenLog: () -> Unit,
+    exactAlarmGranted: Boolean = true,
+    onRequestExactAlarm: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -151,6 +153,18 @@ fun TaskListScreen(
 
             Button(onClick = onSaveSettings, modifier = Modifier.fillMaxWidth()) {
                 Text("保存全局设置")
+            }
+
+            if (!exactAlarmGranted) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Text(
+                    "未授予「闹钟与提醒」权限，定时只能使用非精确调度，触发可能延迟几分钟。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                TextButton(onClick = onRequestExactAlarm, modifier = Modifier.fillMaxWidth()) {
+                    Text("去授予精确闹钟权限 ›")
+                }
             }
         }
 
