@@ -1,6 +1,6 @@
 id=app_scheduler
-name=定时启动 App
-version=v1.4
-versionCode=5
-author=YourName
-description=按 config.sh 中配置的 crontab 时间点强制停止并重新启动指定 App；支持锁屏自动解锁、多时间点调度、日志轮转、失败通知、单实例锁，全部可调参数集中于 config.sh
+name=AppTimer
+version=v2.0.0
+versionCode=20
+author=alearners
+description=按 config.sh 配置的时间点强制停止并重新启动指定 App；支持锁屏自动解锁、手动解锁兜底、启动后无操作自动锁屏、crond 与内部计时器两种计时方式、日志轮转、失败通知、单实例锁，全部可调参数集中于 config.sh

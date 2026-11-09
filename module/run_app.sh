@@ -284,4 +284,36 @@ fi
 
 END_TS=$(date +%s)
 log "=== 执行结束（耗时 $((END_TS - START_TS)) 秒） ==="
+
+# ---------- 5. 启动后无操作自动锁屏 ----------
+# 独立子进程盯着：不影响本次任务收尾，也不会占着锁。
+# 判定「无操作」= 到点时屏幕还没被用户自己锁掉，且前台仍然是本次启动的 App。
+if [ "${AUTO_LOCK:-0}" = "1" ]; then
+    AUTO_LOCK_DELAY=${AUTO_LOCK_DELAY:-5}
+    case "$AUTO_LOCK_DELAY" in
+        ""|*[!0-9]*) AUTO_LOCK_DELAY=5 ;;
+    esac
+    [ "$AUTO_LOCK_DELAY" -lt 2 ] && AUTO_LOCK_DELAY=2
+    [ "$AUTO_LOCK_DELAY" -gt 600 ] && AUTO_LOCK_DELAY=600
+    log "自动锁屏已启用：${AUTO_LOCK_DELAY} 秒内无操作则熄屏上锁"
+    (
+        sleep "$AUTO_LOCK_DELAY"
+        if is_locked "$(get_keyguard)"; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 自动锁屏：用户已自行锁屏，跳过" >> "$LOG_FILE"
+            exit 0
+        fi
+        FG=$(dumpsys window 2>/dev/null | grep -m1 'mCurrentFocus=' | tr -d '\r' \
+            | sed -e 's/.* u0 //' -e 's/\/.*//' | tr -d ' ')
+        if [ -n "$FG" ] && [ "$FG" != "$APP_PKG" ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 自动锁屏：前台已是 $FG，判定用户已接管，跳过" >> "$LOG_FILE"
+            exit 0
+        fi
+        if input keyevent 223 >/dev/null 2>&1; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 启动后 ${AUTO_LOCK_DELAY} 秒无操作，已自动熄屏上锁" >> "$LOG_FILE"
+        else
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 自动锁屏失败：input keyevent 223 未成功" >> "$LOG_FILE"
+        fi
+    ) &
+fi
+
 exit 0

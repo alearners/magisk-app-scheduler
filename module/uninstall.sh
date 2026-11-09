@@ -8,6 +8,11 @@
 export PATH=/data/adb/magisk:/system/bin:/system/xbin:/sbin:/vendor/bin:/product/bin
 
 pkill crond 2>/dev/null
+# 内部计时器模式下的循环进程
+MODDIR=${0%/*}
+[ -f "$MODDIR/timer.pid" ] && kill "$(cat "$MODDIR/timer.pid" 2>/dev/null)" 2>/dev/null
+pkill -f "service.sh" 2>/dev/null
 sleep 1
+rm -f "$MODDIR/timer.pid"
 rm -rf /data/local/tmp/app_scheduler.lock /data/local/tmp/app_scheduler.lock.d
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] [uninstall] 已停止 crond 并清理运行时文件" >> /data/local/tmp/app_scheduler.log
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] [uninstall] 已停止 crond 与内部计时循环并清理运行时文件" >> /data/local/tmp/app_scheduler.log

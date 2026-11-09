@@ -1,6 +1,6 @@
-# 定时启动 App · Magisk / LSPosed 模块
+# AppTimer · Magisk / LSPosed 模块
 
-<p align="center"><img src="docs/icon.png" width="132" alt="定时启动 App 应用图标"></p>
+<p align="center"><img src="docs/icon.png" width="132" alt="AppTimer 应用图标"></p>
 
 按可配置的 crontab 时间点**强制停止并重新启动**指定 App 的 Android 模块。全部可调参数集中在 `config.sh`，升级模块时只需替换脚本、保留自己的配置即可。
 
@@ -14,14 +14,26 @@
 
 | 分支 | 产物 | 形态 | 适用场景 |
 | --- | --- | --- | --- |
-| `main` | `app_scheduler-vX.zip` | Magisk 模块（纯 shell） | 首选。Magisk / KernelSU 直接刷入，无需额外框架 |
-| `lsposed` | `app-scheduler-lsposed-vX.apk` | LSPosed 模块（APK）+ 内置调度 | 需要更可靠的解锁方式：用 Xposed 钩子收起锁屏，不再依赖 `input text` 注入密码 |
+| `main` | `apptimer-magisk-vX.zip` | Magisk 模块（纯 shell） | 首选。Magisk / KernelSU 直接刷入，无需额外框架 |
+| `lsposed` | `apptimer-lsposed-vX.apk` | LSPosed 模块（APK）+ 内置调度 | 需要更可靠的解锁方式：用 Xposed 钩子收起锁屏，不再依赖 `input text` 注入密码 |
 
 `lsposed` 分支在 `main` 的基础上新增 `lsposed/` 工程：APK 自带界面与定时器，通过 `su` 执行与 shell 版等价的流程，并用 Xposed 钩子在 SystemUI 内收起 Keyguard，注入密码只作为兜底。
 
 LSPosed 版支持**多应用、多计划、多定时方式、启动条件**：界面里可直接浏览并勾选已安装应用（无需手输包名），一个计划可同时启动多个 App，定时可选「按时间点 / 按星期 / 按间隔循环」并设置总执行次数，还能限定「仅充电 / 仅 WiFi / 仅屏幕熄灭」时执行。
 
 界面用 **Kotlin 2.0.21 + Jetpack Compose（Material3）** 编写：计划列表、计划编辑、应用选择、运行日志四个页面，圆角卡片 + 青蓝主色（`#1FA0CC`）+ 浅蓝灰背景，Android 12 以上跟随系统动态取色，整体风格参考开源项目 Sesame-AG 的 Compose 主题与卡片式布局。
+
+### v2.0.0 起的新增能力（两条支路功能对等）
+
+| 能力 | Magisk 版（`main`） | LSPosed 版（`lsposed`） |
+| --- | --- | --- |
+| 启动后无操作自动锁屏 | `config.sh` 的 `AUTO_LOCK` + `AUTO_LOCK_DELAY`，`run_app.sh` 起子进程到点判定后 `input keyevent 223` | 全局设置里的开关 + 秒数，`AutoLock` 排闹钟，到点重读配置并确认前台仍是目标 App 才熄屏 |
+| 计时方式二选一 | `TIMER_MODE`：`cron`（crond 驱动）或 `internal`（模块自己的 sleep 循环，按 `INTERVAL_MINUTES`） | 全局设置里的开关：系统闹钟（`AlarmManager`）或应用内部计时器（常驻 `TimerService`） |
+| 解锁后续跑 | 轮询 Keyguard 状态（`MANUAL_UNLOCK_POLL`），解锁即启动 | 前台服务**动态注册** `USER_PRESENT` + 2 秒轮询双保险 |
+
+> 「启动后无操作自动锁屏」只看两个条件：到点时屏幕没被用户自己锁掉，且前台还是本次启动的那个 App。用户一旦切到别的界面，这一步自动跳过，不会误锁。
+>
+> APK 的 `applicationId` 仍是 `com.appscheduler.lsposed`，模块 `id` 仍是 `app_scheduler`：改名只动显示名、包文件名与文档。改包名／模块 id 会让 LSPosed 作用域、`signature` 权限链路和既有机上的覆盖升级全部失效，必须卸载重装。
 
 ### 界面预览
 
@@ -51,6 +63,8 @@ cd lsposed && ./gradlew :app:recordPaparazziDebug
 - **锁屏解锁**：优先 `wm dismiss-keyguard`（无需模拟滑动）；未解锁时按屏幕比例上滑 + 输入密码 + 回车，解锁后二次校验 Keyguard 状态。
 - **手动解锁兜底**：自动解锁失败时不放弃，改为等待用户自己解锁（默认最长 180 秒，可关）；一旦检测到解锁立即启动 App，超时才记失败并发通知。
 - **失败即退出**：兜底关闭或等待超时时不会盲目启动 App，改发通知提醒。
+- **启动后无操作自动锁屏**：`AUTO_LOCK=1` 时，启动完成后起一个后台子进程，等 `AUTO_LOCK_DELAY` 秒（默认 5，2–600）再判定：屏幕没被你自己锁掉、前台也仍是本次启动的 App 才 `input keyevent 223` 熄屏；你切走了就自动跳过。
+- **计时方式二选一**：`TIMER_MODE=cron` 用 BusyBox `crond` 驱动（等价「系统闹钟」）；`TIMER_MODE=internal` 不用 crond，由模块自己的 `sleep` 循环按 `INTERVAL_MINUTES` 数时间（等价「应用内部计时器」），卸载或切回 crond 时会把循环进程一起停掉。
 - **日志轮转**：单文件超过 `LOG_MAX_SIZE`（默认 1 MB）自动轮转，保留份数由 `LOG_MAX_ROTATIONS` 控制。
 - **单实例锁**：上一轮未结束时本轮直接跳过，避免重叠执行。
 - **失败通知**：`cmd notification post` 发送系统通知。
@@ -141,7 +155,11 @@ su -c sh /data/adb/modules/app_scheduler/service.sh
 | `LOG_MAX_SIZE` | `1048576` | 单份日志上限（字节） |
 | `LOG_MAX_ROTATIONS` | `1` | 保留旧日志份数，`0` 表示不留 |
 | `ENABLE_NOTIFY` | `1` | 失败通知开关 |
-| `NOTIFY_TITLE` / `NOTIFY_TAG` | `定时启动 App` / `app_scheduler` | 通知标题与标签 |
+| `NOTIFY_TITLE` / `NOTIFY_TAG` | `AppTimer` / `app_scheduler` | 通知标题与标签 |
+| `AUTO_LOCK` | `0` | 启动后无操作是否自动熄屏上锁（`1` 开 / `0` 关） |
+| `AUTO_LOCK_DELAY` | `5` | 无操作多少秒后锁屏（2–600） |
+| `TIMER_MODE` | `cron` | 计时方式：`cron`=crond 驱动；`internal`=模块自己的计时循环 |
+| `INTERVAL_MINUTES` | `120` | `TIMER_MODE=internal` 时的执行间隔（分钟） |
 | `SCHEDULE_CRON_LINES` | `0 */2 * * *` | 调度表达式，可多行 |
 
 ### 调度示例
@@ -203,12 +221,12 @@ git push origin v1.4
 ### lsposed 分支（APK）
 
 - 触发：push 到 `lsposed`、`lsposed-v*` 标签、手动触发。
-- 步骤：JDK 17 + Gradle 8.7 → `:app:assembleRelease` → 重命名并上传 `app-scheduler-lsposed-vX.apk` + sha256 → 标签时发布 Release。
+- 步骤：JDK 17 + Gradle 8.7 → `:app:assembleRelease` → 重命名并上传 `apptimer-lsposed-vX.apk` + sha256 → 标签时发布 Release。
 
 ### 本地自查
 
 ```bash
-sh scripts/package.sh          # 生成 build/app_scheduler-v1.4.zip，与 CI 同样的校验
+sh scripts/package.sh          # 生成 build/apptimer-magisk-v2.0.0.zip，与 CI 同样的校验
 ```
 
 ---
@@ -217,6 +235,7 @@ sh scripts/package.sh          # 生成 build/app_scheduler-v1.4.zip，与 CI �
 
 | 版本 | versionCode | 变更 |
 | --- | --- | --- |
+| v2.0.0（Main 与 LSPosed 同步） | 20 | 更名为 **AppTimer**（显示名 / README / 产物名，包名与模块 `id` 保持不变以免破坏覆盖升级）；新增启动后无操作自动锁屏（开关 + 秒数，默认 5）；新增计时方式二选一（系统闹钟 / 应用内部计时器，shell 侧为 crond / 内部循环）；打包脚本统一为 `apptimer-magisk-vX.zip` + `apptimer-lsposed-vX.apk` |
 | lsposed v1.5.5 | 11 | 定时触发前再校验一次调度总开关（关掉后残留闹钟不会把 App 拉起）、计划数据补纯 JVM 回归测试并在 CI 打包前先跑 |
 | lsposed v1.5.4 | 10 | 等待手动解锁时仍排下一次触发（不再一次锁屏就让计划停摆）、等待超时或排队期间计划被关闭按失败记账并续排、处理完仍有待启动条目时重排超时闹钟、无 root 时明确提示而不是误报「没有可启动的包」、前台服务通知失败不崩溃、开机清理重启前残留的待启动队列 |
 | lsposed v1.5.3 | 9 | 编辑计划不再重置「剩余次数」（仅改动总次数时才重置）、计划 JSON 里的空 `times` 数组如实还原不再退回 08:00、调度总开关首次安装默认开启、仓库内脚本补可执行位、`.gitignore` 补 Paparazzi 快照目录 |
