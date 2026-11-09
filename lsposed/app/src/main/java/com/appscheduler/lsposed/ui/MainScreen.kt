@@ -180,6 +180,23 @@ fun MainScreen() {
                                 toast("无法打开系统设置，请手动授予「闹钟与提醒」权限")
                             }
                         }
+                    },
+                    onRequestIgnoreBattery = {
+                        try {
+                            val intent = Intent(
+                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                android.net.Uri.parse("package:" + context.packageName)
+                            )
+                            context.startActivity(intent)
+                        } catch (t: Throwable) {
+                            // 部分 ROM（含部分 HyperOS 机型）没有这个入口，退回到电池优化列表
+                            try {
+                                context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                                toast("请在列表里把「定时启动 App」设为不优化")
+                            } catch (t2: Throwable) {
+                                toast("无法打开系统设置，请在「设置 → 省电与电池」里把本 App 设为无限制")
+                            }
+                        }
                     }
                 )
 

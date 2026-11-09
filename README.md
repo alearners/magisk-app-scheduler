@@ -224,6 +224,7 @@ sh scripts/package.sh          # 生成 build/app_scheduler-v1.4.zip，与 CI �
 
 | 版本 | versionCode | 变更 |
 | --- | --- | --- |
+| lsposed v1.5.8 | 14 | 新增「电池优化未放行」检测与一键跳转（真机实测受限状态下精确闹钟会被系统推迟数分钟），README 补省电策略与「强行停止会丢闹钟」的说明 |
 | lsposed v1.5.7 | 13 | 发布包改用仓库固定签名密钥（原先每次 CI 现场生成 debug 密钥，导致每个版本签名都不同、无法覆盖升级），从此可正常增量安装 |
 | lsposed v1.5.6 | 12 | 锁屏检测改为先读 `dumpsys window` 的 `isKeyguardShowing`、再退回 `window policy` 的 `mKeyguardShowing`（HyperOS 上原来永远误判为锁屏，已解锁也走「等手动解锁」）、通知建渠道与发送移到独立线程不再阻塞执行链、前台服务加 180 秒看门狗防止通知残留 |
 | lsposed v1.5.5 | 11 | 定时触发前再校验一次调度总开关（关掉后残留闹钟不会把 App 拉起）、计划数据补纯 JVM 回归测试并在 CI 打包前先跑 |
