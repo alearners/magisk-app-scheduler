@@ -79,13 +79,15 @@ Java 侧只保留执行与钩子（`TaskRunner` / `XposedEntry` / `Config` / `Lo
 
 一枚青蓝底色、白色圆环表盘的时钟：时针指 8 点、分针指 12 点，秒针斜指 4 点；四个方位用更深一档的青蓝小圆点作刻度。图形只靠轮廓与色块识别，缩小到 48dp 仍清晰，也不出现任何文字。
 
+外形按 MIUI / HyperOS 桌面规范处理：不用 Apple 式的单一圆角矩形，而是 `|x|^n + |y|^n = 1`（n = 4）的超椭圆 squircle——圆角过渡更饱满、四边更直，和系统自带图标放在一起既不会显得"方正"，也不会圆过头。表盘外接框收紧到图标边长的 64.5%，四周留足呼吸区，避免上机后贴边显大。
+
 资源按 Android 规范铺满五个密度：
 
 | 文件 | 用途 |
 | --- | --- |
-| `res/mipmap-*/ic_launcher.png` | 传统方形图标（48/72/96/144/192） |
+| `res/mipmap-*/ic_launcher.png` | 传统方形图标（48/72/96/144/192），超椭圆圆角遮罩 |
 | `res/mipmap-*/ic_launcher_round.png` | 圆形启动器图标（同一套尺寸，圆形遮罩） |
-| `res/mipmap-*/ic_launcher_foreground.png` | 自适应图标前景（108/162/216/324/432，四周留 6% 边距，表盘落在 66dp 安全区内） |
+| `res/mipmap-*/ic_launcher_foreground.png` | 自适应图标前景（108/162/216/324/432，图形占画布 43%，裁到 72dp 可见区后仍是 64.5%） |
 | `res/mipmap-anydpi-v26/ic_launcher.xml`、`ic_launcher_round.xml` | Android 8+ 自适应图标，前景 + `@color/ic_launcher_background` 纯色底 |
 | `res/values/colors.xml` | 图标底色 `#2297D5`，取自母图背景，避免与前景出现色差接缝 |
 
