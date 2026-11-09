@@ -10,3 +10,8 @@ module/crontab_dir/
 Thumbs.db
 # Paparazzi 渲染时生成的原始截图；README 引用的副本放在 docs/screenshots/
 lsposed/app/src/test/snapshots/
+# JVM 崩溃转储与 Kotlin 编译会话锁：本机编译失败时会掉在仓库根目录，别提交进来
+hs_err_pid*.log
+replay_pid*.log
+*.salive
+.kotlin/

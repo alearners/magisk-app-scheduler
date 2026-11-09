@@ -43,6 +43,15 @@ object RunCoordinator {
         val log = StringBuilder()
         log.append("=== 定时触发 ${TaskRunner.stamp()}（${task.title()}） ===\n")
 
+        if (!TaskRunner.suAvailable()) {
+            log.append("未获得 root（su 不可用），本次跳过\n")
+            LogStore.append(context, log.toString())
+            TaskRunner.notifyFailure(context, log.toString())
+            // 不能因为这一次拿不到 root 就让计划彻底停摆，仍然排下一次
+            Scheduler.schedule(context, task)
+            return
+        }
+
         val reason = ConditionChecker.unfilledReason(context, task)
         if (reason != null) {
             log.append("启动条件未满足（$reason），本次跳过\n")
@@ -76,6 +85,9 @@ object RunCoordinator {
                     LogStore.append(context, log.toString())
                     TaskRunner.notifyManualUnlock(context, waitSec)
                     scheduleTimeout(context, waitSec)
+                    // 挂起等待用户解锁的同时，把计划的下一次触发排好；
+                    // 否则这次挂起就等于把整个计划停掉了（超时或解锁失败后不再有后续闹钟）
+                    Scheduler.schedule(context, task)
                     return
                 }
                 log.append("未开启手动解锁兜底，放弃本次任务\n")
@@ -106,8 +118,7 @@ object RunCoordinator {
         val now = System.currentTimeMillis()
         for (entry in entries) {
             if (now > entry.deadline) {
-                logPendingTimeout(context, entry)
-                PendingStore.remove(context, entry.taskId)
+                expireEntry(context, entry)
                 continue
             }
             if (TaskRunner.isLocked()) {
@@ -118,6 +129,12 @@ object RunCoordinator {
             if (task == null) {
                 PendingStore.remove(context, entry.taskId)
                 LogStore.append(context, "待启动计划「${entry.title}」已不存在，已清理\n")
+                continue
+            }
+            if (!task.enabled || !Config.get(context).enabled()) {
+                // 排队期间用户关掉了这个计划或调度总开关，就不要在解锁后偷偷启动
+                PendingStore.remove(context, entry.taskId)
+                LogStore.append(context, "待启动计划「${entry.title}」已被关闭，已取消\n")
                 continue
             }
             val log = StringBuilder()
@@ -139,28 +156,41 @@ object RunCoordinator {
             PendingStore.remove(context, entry.taskId)
             applyResult(context, task, ok)
         }
-        cancelTimeout(context)
+        // 可能还有条目没处理完（例如锁屏尚未完全收起），这时不能把超时闹钟取消掉
+        refreshTimeout(context)
     }
 
     /** 超时闹钟到点：清理过期条目并通知，不再等待 */
     fun expirePending(context: Context) {
         val now = System.currentTimeMillis()
-        var changed = false
         for (entry in PendingStore.all(context)) {
             if (now > entry.deadline) {
-                logPendingTimeout(context, entry)
-                PendingStore.remove(context, entry.taskId)
-                changed = true
+                expireEntry(context, entry)
             }
         }
-        if (!changed) {
-            // 只是闹钟提前响起，说明还有未到期的条目，重排一次保证收尾
-            val alive = PendingStore.all(context)
-            if (alive.isNotEmpty()) {
-                val remaining = ((alive.minOf { it.deadline } - now) / 1000L).toInt().coerceAtLeast(10)
-                scheduleTimeout(context, remaining)
-            }
+        refreshTimeout(context)
+    }
+
+    /** 丢弃一条待启动记录：记超时、按失败记账并排下一次，避免计划从此不再触发 */
+    private fun expireEntry(context: Context, entry: PendingLaunch) {
+        logPendingTimeout(context, entry)
+        PendingStore.remove(context, entry.taskId)
+        val task = TaskStore.find(context, entry.taskId)
+        if (task != null) {
+            applyResult(context, task, false)
         }
+    }
+
+    /** 队列空了就撤销超时闹钟，还有存活条目就按最早的截止时间重排一次 */
+    private fun refreshTimeout(context: Context) {
+        val alive = PendingStore.all(context)
+        if (alive.isEmpty()) {
+            cancelTimeout(context)
+            return
+        }
+        val remaining = ((alive.minOf { it.deadline } - System.currentTimeMillis()) / 1000L)
+            .toInt().coerceAtLeast(10)
+        scheduleTimeout(context, remaining)
     }
 
     /** 界面上的「立即执行」：同步跑完并把结果写日志 */

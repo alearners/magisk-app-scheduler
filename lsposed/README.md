@@ -116,7 +116,7 @@ Java 侧只保留执行与钩子（`TaskRunner` / `XposedEntry` / `Config` / `Lo
 git push origin lsposed
 
 # 或者打标签发布 Release
-git tag lsposed-v1.5.3 && git push origin lsposed-v1.5.3
+git tag lsposed-v1.5.4 && git push origin lsposed-v1.5.4
 ```
 
 本地等价命令（需要本机 Android SDK）：
@@ -127,7 +127,7 @@ gradle -p lsposed :app:assembleRelease
 
 ## 安装
 
-1. 下载 `app-scheduler-lsposed-v1.5.3.apk`；
+1. 下载 `app-scheduler-lsposed-v1.5.4.apk`；
 2. 正常安装（授予 root 权限提示时允许）；
 3. LSPosed 管理器 → 模块 → 启用「定时启动 App · LSPosed」→ 勾选作用域 **System UI**（`com.android.systemui`）；
 4. 重启手机（或重启 SystemUI）；

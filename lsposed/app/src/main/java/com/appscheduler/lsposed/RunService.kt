@@ -22,7 +22,13 @@ class RunService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification())
+        // 前台通知起不来（少权限、渠道被禁用、Android 14 的 specialUse 限制）时不能让服务直接崩，
+        // 退化成普通后台服务把这一轮跑完，总比丢掉整次任务好
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification())
+        } catch (t: Throwable) {
+            LogStore.append(this, "前台服务通知失败，退化为普通服务执行: $t\n")
+        }
         val action = intent?.action
         val taskId = intent?.getLongExtra(EXTRA_TASK_ID, 0L) ?: 0L
         POOL.execute {
