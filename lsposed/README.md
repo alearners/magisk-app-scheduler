@@ -15,7 +15,34 @@
 | 应用数量 | 一个固定包名 | 一个计划可启动多个 App |
 | 配置 | 编辑 `config.sh` | 图形界面 |
 
-功能对齐的几项（两边都有）：多 App 顺序启动、解锁校验与兜底、无操作自动锁屏（可配秒数、切走不误锁）、计时基准二选一、失败通知与日志。
+功能对齐的几项（两边都有）：多 App 顺序启动、解锁校验与兜底、无操作自动锁屏（可配秒数、切走不误锁）、计时基准二选一、失败通知与日志、**配置导出与导入**。
+
+## 配置备份
+
+界面底部「配置备份」卡片提供两个按钮：
+
+- **导出配置**：走系统文件选择器（SAF），把全部计划 + 全局设置写成 `apptimer-config-YYYYmmdd-HHmm.json`；
+- **导入配置**：选 JSON → 校验（是不是 AppTimer 的、`schema` 是否比当前新）→ 弹确认框 → **覆盖**当前全部计划与全局设置，写完立刻按新的 `timerMode` 重排闹钟或拉起内部计时器。
+
+JSON 结构（`schema=1`）：
+
+```json
+{
+  "app": "AppTimer",
+  "schema": 1,
+  "exportedAt": "2026-11-10T11:00:00",
+  "versionName": "2.1.0",
+  "global": {
+    "enabled": true, "password": "……", "manualFallback": true, "manualWait": 120,
+    "autoLock": false, "autoLockDelay": 5, "timerMode": "alarm"
+  },
+  "tasks": [ { "name": "…", "packages": ["…"], "scheduleType": "INTERVAL", "intervalMinutes": 60, … } ]
+}
+```
+
+导入时计划会被重新编号（`id` 从 1 起）并把自增游标拨到最大值 + 1，所以导入不会和「新建计划」抢同一个 id；`maxRuns > 0` 但 `remainingRuns <= 0` 的「已跑完」计划会被拉回满次数，避免导入一份备份后计划一进来就是死的。
+
+文件含**明文锁屏密码**；导入是覆盖式的，动手前先导出一份现有配置更稳。Magisk 版的备份是 `.sh`（`config.sh` 副本），与本版的 `.json` **互不通用**。
 
 ## 包信息
 
@@ -23,7 +50,7 @@
 | --- | --- |
 | applicationId | `com.appscheduler.lsposed` |
 | 显示名 | `AppTimer` |
-| 版本 | `versionCode 20` / `versionName 2.0.0` |
+| 版本 | `versionCode 21` / `versionName 2.1.0` |
 | 最低支持 | Android 8.0（API 26） |
 | 目标 SDK | 34 |
 | 签名 | 仓库固定密钥（`CN=App Scheduler, O=alearners, C=CN`），证书 SHA-256 `10948BFB9…000B2E5` |
@@ -42,6 +69,7 @@ lsposed/app/src/main/
 │   ├── RunCoordinator.kt / TaskRunner.java     # 执行编排与 su 调用
 │   ├── schedule/                               # 调度器与接收器
 │   ├── store/                                  # 计划、挂起队列、日志
+│   ├── transfer/ConfigTransfer.kt              # 配置导出 / 导入（JSON 校验、覆盖写入、重排）
 │   └── ui/                                     # Compose 界面
 └── res/                                        # 图标、文案（app_name=AppTimer）
 ```
@@ -64,6 +92,7 @@ cd lsposed
 2. App 内授予通知权限，并加入电池优化白名单（HyperOS 还要给「自启动 / 无限制」）；
 3. 建一个 1 分钟间隔、只启动单个 App 的计划，等一轮，看日志里是否有「定时触发 → 解锁 → 启动」；
 4. 打开「启动后无操作自动锁屏」，填 5 秒，等下一轮，确认日志出现「启动后 5 秒无操作，已自动熄屏上锁」；
-5. 同一轮里触发后立刻切到别的界面，确认日志出现「前台已是…，判定为用户已接管，跳过」，且屏幕没有被关掉。
+5. 同一轮里触发后立刻切到别的界面，确认日志出现「前台已是…，判定为用户已接管，跳过」，且屏幕没有被关掉；
+6. 点「导出配置」存一份，删掉一个计划后再「导入配置」，确认计划与全局设置都回到导出时的状态、日志里出现「导入配置：已导入 N 个计划」。
 
 任何一步不符合预期，先看日志再改参数；不要同时改多个设置。
