@@ -36,6 +36,7 @@
 - **强制启动**：先 `am force-stop` 再启动，保证每次都是干净冷启动。
 - **无操作自动锁屏**：启动成功后开始计时（默认 5 秒）。到点时只有同时满足「屏幕没被你自己锁掉」和「前台仍是本次启动的那个 App」才熄屏上锁；你一旦切到别的界面，这一步自动跳过，**不会误锁**。
 - **启动条件**（LSPosed 版）：仅充电 / 仅 WiFi / 仅熄屏，不满足就跳过本次并记日志。
+- **配置导出与导入**：两版都能把当前配置存成一个文件，换机、重装、刷回旧版后一条命令 / 两次点击就能恢复，不用重新手敲参数。
 - **可观测**：每一步都写日志；失败发系统通知；Magisk 管理器点「执行」可手动跑一次。
 
 ---
@@ -112,6 +113,29 @@ su -c sh /data/adb/modules/app_scheduler/service.sh
 | 循环次数 | `0` 不限；>0 时跑完自动停用该计划 |
 | 启动条件 | 无限制 / 仅充电 / 仅 WiFi / 仅熄屏 |
 
+### 导出与导入
+
+两版都支持，但**文件格式互不通用**：Magisk 版导出的是 `config.sh` 副本（`.sh`），LSPosed 版导出的是 JSON 备份（含全部计划 + 全局设置）。
+
+**Magisk 版**（root 下执行，备份落在 `/sdcard/AppTimer/`）：
+
+```bash
+# 导出：生成 apptimer-config-YYYYmmdd-HHMMSS.sh
+su -c sh /data/adb/modules/app_scheduler/config_export.sh
+
+# 导入：先语法与内容校验，把原 config.sh 另存为 config.sh.bak-<时间戳>，再覆盖并重启调度
+su -c sh /data/adb/modules/app_scheduler/config_import.sh /sdcard/AppTimer/apptimer-config-20261110-103000.sh
+```
+
+导入不会碰你的其它参数：只有校验通过才覆盖，失败则原配置保持不动。要回退就 `cp` 那份 `.bak` 回 `config.sh`，再 `sh service.sh`。
+
+**LSPosed 版**（界面底部「配置备份」卡片）：
+
+- **导出配置** → 系统文件选择器给个路径，写出 `apptimer-config-YYYYmmdd-HHmm.json`；
+- **导入配置** → 选文件 → 先校验（是不是 AppTimer 的、schema 是否兼容）→ 弹确认框 → 确认后**覆盖**当前全部计划与全局设置，并立刻重排闹钟 / 拉起内部计时器。
+
+> ⚠️ 两种备份文件都含**明文锁屏密码**，别放进网盘或发给别人。LSPosed 版导入是覆盖式：当前计划会被整体替换，导入前先导出一份现有配置更稳妥。
+
 ---
 
 ## 四、排查
@@ -151,6 +175,7 @@ su -c cat /data/data/com.appscheduler.lsposed/files/apptimer.log
 | 厂商冻结策略 | MIUI/HyperOS 会在后台冻结应用，导致定时与秒级计时被推迟；需手动放行 |
 | 强制停止有代价 | 目标 App 的未保存数据会丢失 |
 | 只测过少数机型 | 主要在 HyperOS（Android 15）真机验证；其他 ROM 请自测 |
+| 备份文件是明文 | 导出的配置含明文密码，且两版格式互不通用：Magisk 版是 `.sh`，LSPosed 版是 `.json` |
 
 ---
 

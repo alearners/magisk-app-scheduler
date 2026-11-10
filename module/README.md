@@ -12,6 +12,8 @@ module/
 ├── config.sh                                     # 全部可调参数
 ├── service.sh                                    # 开机读配置：cron 模式启 crond / internal 模式起计时循环
 ├── run_app.sh                                    # 核心执行脚本（解锁 → 启动 → 可选自动锁屏）
+├── config_export.sh                              # 导出配置：复制 config.sh 到 /sdcard/AppTimer/
+├── config_import.sh                              # 导入配置：校验 → 备份原文件 → 覆盖 → 重启调度
 ├── action.sh                                     # 管理器「执行」按钮：立即跑一次
 ├── customize.sh                                  # 安装时设置权限
 └── uninstall.sh                                  # 卸载时停止 crond 与计时循环并清理
@@ -34,5 +36,16 @@ INTERVAL_MINUTES=120
 `run_app.sh` 在启动成功后起一个子进程等 `AUTO_LOCK_DELAY` 秒，到点后依次确认「屏幕没被自己锁掉」与「前台仍是目标 App」，两者同时成立才执行 `input keyevent 223` 熄屏；你已切到别的界面则跳过。
 
 完整参数表、排查方法与已知限制见仓库根目录 `README.md`。
+
+## 配置备份
+
+```sh
+su -c sh /data/adb/modules/app_scheduler/config_export.sh
+su -c sh /data/adb/modules/app_scheduler/config_import.sh /sdcard/AppTimer/apptimer-config-YYYYmmdd-HHMMSS.sh
+```
+
+导出落在 `/sdcard/AppTimer/apptimer-config-<时间戳>.sh`，本质是一份 `config.sh` 副本。导入先把当前配置另存为 `config.sh.bak-<时间戳>`，再用 `sh -n` 与 `APP_PKG=` / `SCHEDULE_CRON_LINES=` 两项检查确认文件真的是本模块配置；校验不过不会动原文件。导入成功后自动 `pkill crond`、杀掉内部计时循环并重跑 `service.sh`，新的 `TIMER_MODE` / 调度行立即生效。
+
+备份文件是**明文**，含锁屏密码，请自行保管。
 
 打包统一用 `sh scripts/package.sh`（或由 GitHub Actions 完成），产物名为 `apptimer-magisk-vX.zip`；不要手工压缩。

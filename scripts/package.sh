@@ -33,6 +33,7 @@ echo "== 模块版本 v${MODULE_VERSION} / APK 版本 ${APK_VERSION:-不在本�
 
 echo "== 校验必需文件 =="
 for f in module/module.prop module/config.sh module/service.sh module/run_app.sh \
+         module/config_export.sh module/config_import.sh \
          module/customize.sh module/uninstall.sh module/action.sh \
          module/META-INF/com/google/android/update-binary; do
     [ -f "$f" ] || { echo "缺少文件: $f"; exit 1; }
