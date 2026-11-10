@@ -53,8 +53,14 @@ object AutoLock {
             return
         }
         savePkgs(context, packages)
+        val delay = delaySec.coerceAtLeast(2)
+        // 首选：前台服务里原地计时。真机上「后台 + 精确闹钟」会被厂商省电策略推迟，
+        // 5 秒会变成几分钟，必须靠前台服务保住计时精度。
+        if (RunService.startLockDelay(context, delay)) {
+            return
+        }
         val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val at = System.currentTimeMillis() + delaySec.coerceAtLeast(2) * 1000L
+        val at = System.currentTimeMillis() + delay * 1000L
         val pi = intent(context)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {

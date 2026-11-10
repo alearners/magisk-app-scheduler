@@ -50,13 +50,20 @@ class RunService : Service() {
             return START_NOT_STICKY
         }
 
-        scheduleWatchdog(startId)
+        val delaySec = intent?.getIntExtra(EXTRA_DELAY_SEC, 0) ?: 0
+        scheduleWatchdog(startId, delaySec)
         POOL.execute {
             try {
                 when (action) {
                     ACTION_LAUNCH -> RunCoordinator.launchPending(this)
                     ACTION_EXPIRE -> RunCoordinator.expirePending(this)
                     ACTION_LOCK -> AutoLock.fire(this)
+                    ACTION_LOCK_DELAY -> {
+                        // 在服务里原地等到点再锁：进程保持前台优先级，
+                        // 不会被厂商省电策略冻结掉那个「5 秒」闹钟
+                        sleep(delaySec.coerceAtLeast(2) * 1000L)
+                        AutoLock.fire(this)
+                    }
                     else -> RunCoordinator.executeTask(this, taskId)
                 }
             } catch (t: Throwable) {
@@ -153,16 +160,17 @@ class RunService : Service() {
      * 超过 [WATCHDOG_SEC] 秒仍没跑完就强制摘掉前台通知并结束服务，
      * 让系统与用户都不会看到一个永远「正在执行」的通知。
      */
-    private fun scheduleWatchdog(startId: Int) {
+    private fun scheduleWatchdog(startId: Int, extraSec: Int = 0) {
         val handler = Handler(Looper.getMainLooper())
+        val limit = (WATCHDOG_SEC + extraSec).toLong()
         val runnable = Runnable {
-            LogStore.append(this, "执行超过 ${WATCHDOG_SEC} 秒仍未结束，强制结束前台服务\n")
+            LogStore.append(this, "执行超过 $limit 秒仍未结束，强制结束前台服务\n")
             stopForegroundRun()
             stopSelf(startId)
         }
         watchdogHandler = handler
         watchdogRunnable = runnable
-        handler.postDelayed(runnable, WATCHDOG_SEC * 1000L)
+        handler.postDelayed(runnable, limit * 1000L)
     }
 
     private fun cancelWatchdog() {
@@ -198,8 +206,13 @@ class RunService : Service() {
     private fun buildNotification(action: String?): Notification {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val waitMode = action == ACTION_WAIT
+        val lockMode = action == ACTION_LOCK_DELAY
         val title = APP_NAME
-        val text = if (waitMode) "等待你手动解锁后启动…" else "正在执行计划…"
+        val text = when {
+            waitMode -> "等待你手动解锁后启动…"
+            lockMode -> "启动后无操作，即将自动锁屏…"
+            else -> "正在执行计划…"
+        }
         val icon = if (waitMode) android.R.drawable.ic_lock_idle_lock
         else android.R.drawable.ic_popup_sync
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -230,7 +243,9 @@ class RunService : Service() {
         const val ACTION_EXPIRE = "com.appscheduler.action.SERVICE_EXPIRE"
         const val ACTION_WAIT = "com.appscheduler.action.SERVICE_WAIT"
         const val ACTION_LOCK = "com.appscheduler.action.SERVICE_LOCK"
+        const val ACTION_LOCK_DELAY = "com.appscheduler.action.SERVICE_LOCK_DELAY"
         const val EXTRA_TASK_ID = "task_id"
+        const val EXTRA_DELAY_SEC = "delay_sec"
 
         /** 显示名统一在这里改一次 */
         const val APP_NAME = "AppTimer"
@@ -270,6 +285,31 @@ class RunService : Service() {
                 true
             } catch (t: Throwable) {
                 LogStore.append(context, "前台服务启动被拒，退化到接收器线程执行: $t\n")
+                false
+            }
+        }
+
+        /**
+         * 启动后延时自动锁屏：不让它依赖系统闹钟。
+         *
+         * 真机（MIUI/HyperOS）复现过：App 在后台被冻结后，+5 秒的精确闹钟会被推迟到几分钟后才送达，
+         * 于是「无操作 5 秒就锁屏」实际变成「几分钟后才锁」。放到前台服务里原地等待，进程有前台优先级，
+         * 计时精度不受省电策略影响。
+         */
+        fun startLockDelay(context: Context, delaySec: Int): Boolean {
+            val intent = Intent(context.applicationContext, RunService::class.java).apply {
+                action = ACTION_LOCK_DELAY
+                putExtra(EXTRA_DELAY_SEC, delaySec)
+            }
+            return try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.applicationContext.startForegroundService(intent)
+                } else {
+                    context.applicationContext.startService(intent)
+                }
+                true
+            } catch (t: Throwable) {
+                LogStore.append(context, "自动锁屏前台服务启动被拒，改用闹钟兜底: $t\n")
                 false
             }
         }
