@@ -5,12 +5,17 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +32,7 @@ import com.appscheduler.lsposed.TaskRunner
 import com.appscheduler.lsposed.model.TaskItem
 import com.appscheduler.lsposed.schedule.Scheduler
 import com.appscheduler.lsposed.store.TaskStore
+import com.appscheduler.lsposed.transfer.ConfigTransfer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -58,6 +64,9 @@ fun MainScreen() {
     var autoLockDelay by remember { mutableStateOf(prefs.autoLockDelay().toString()) }
     var timerMode by remember { mutableStateOf(prefs.timerMode()) }
     var log by remember { mutableStateOf(LogStore.read(context)) }
+    // 导入是覆盖式的：选完文件先弹确认，拿到确认再真正落盘
+    var pendingImport by remember { mutableStateOf<String?>(null) }
+    var pendingImportInfo by remember { mutableStateOf("") }
 
     fun reload() {
         tasks = TaskStore.all(context)
@@ -66,6 +75,70 @@ fun MainScreen() {
 
     fun toast(text: String) {
         scope.launch { snackbar.showSnackbar(text) }
+    }
+
+    /** 把当前内存里的全局设置同步回界面状态（导入后会整体变掉） */
+    fun reloadSettings() {
+        masterEnabled = prefs.enabled()
+        password = prefs.password()
+        manualFallback = prefs.manualFallback()
+        manualWait = prefs.manualWait().toString()
+        autoLock = prefs.autoLock()
+        autoLockDelay = prefs.autoLockDelay().toString()
+        timerMode = prefs.timerMode()
+    }
+
+    // 导出：系统文件选择器给一个目标路径，直接把 JSON 写进去
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(ConfigTransfer.MIME)
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val ok = withContext(Dispatchers.IO) {
+                    try {
+                        context.contentResolver.openOutputStream(uri)?.use { out ->
+                            out.write(ConfigTransfer.exportJson(context).toByteArray(Charsets.UTF_8))
+                            out.flush()
+                        } != null
+                    } catch (t: Throwable) {
+                        LogStore.append(context, "导出配置失败: $t")
+                        false
+                    }
+                }
+                toast(if (ok) "配置已导出（含明文锁屏密码，注意保管）" else "导出失败，换一个目录再试")
+            }
+        }
+    }
+
+    // 导入：读文件 → 校验 → 弹确认 → 覆盖写入
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val text = withContext(Dispatchers.IO) {
+                    try {
+                        context.contentResolver.openInputStream(uri)?.use {
+                            it.readBytes().toString(Charsets.UTF_8)
+                        }
+                    } catch (t: Throwable) {
+                        LogStore.append(context, "读取导入文件失败: $t")
+                        null
+                    }
+                }
+                if (text == null) {
+                    toast("读取文件失败，换一个文件试试")
+                    return@launch
+                }
+                val info = withContext(Dispatchers.IO) { ConfigTransfer.inspect(text) }
+                if (!info.ok) {
+                    toast(info.message)
+                } else {
+                    pendingImportInfo = "${info.message}，${info.taskCount} 个计划"
+                    pendingImport = text
+                }
+            }
+        }
     }
 
     fun saveSettings() {
@@ -150,6 +223,37 @@ fun MainScreen() {
     val batteryIgnored = remember(powerTick) { isBatteryOptimizationIgnored(context) }
 
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { innerPadding ->
+        pendingImport?.let { text ->
+            AlertDialog(
+                onDismissRequest = { pendingImport = null },
+                title = { Text("用这个文件覆盖当前配置？") },
+                text = {
+                    Text(
+                        "文件信息：$pendingImportInfo。\n" +
+                            "当前有 ${tasks.size} 个计划，导入后会被全部替换，全局设置（含锁屏密码）也一起覆盖。"
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pendingImport = null
+                        scope.launch {
+                            val res = withContext(Dispatchers.IO) {
+                                ConfigTransfer.importJson(context, text)
+                            }
+                            if (res.ok) {
+                                reloadSettings()
+                                reload()
+                            }
+                            toast(res.message)
+                        }
+                    }) { Text("覆盖导入") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingImport = null }) { Text("取消") }
+                }
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -190,6 +294,8 @@ fun MainScreen() {
                     timerMode = timerMode,
                     onTimerModeChange = { timerMode = it },
                     onSaveSettings = { saveSettings() },
+                    onExportConfig = { exportLauncher.launch(ConfigTransfer.defaultFileName()) },
+                    onImportConfig = { importLauncher.launch(arrayOf("*/*")) },
                     onOpenLog = { screen = Screen.LOG },
                     exactAlarmGranted = exactAlarmGranted,
                     onRequestExactAlarm = {

@@ -71,4 +71,9 @@ object TaskStore {
         p.edit().putLong(KEY_NEXT_ID, id + 1L).apply()
         return id
     }
+
+    /** 导入配置后把自增游标拨到「已用最大 id + 1」，避免新建计划撞上导入进来的 id */
+    fun setNextId(context: Context, id: Long) {
+        prefs(context).edit().putLong(KEY_NEXT_ID, id.coerceAtLeast(1L)).apply()
+    }
 }
