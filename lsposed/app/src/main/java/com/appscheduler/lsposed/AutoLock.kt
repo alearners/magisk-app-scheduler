@@ -46,37 +46,38 @@ object AutoLock {
         )
     }
 
-    /** 启动成功后调用；未开启或秒数无效时什么都不做 */
-    fun arm(context: Context, delaySec: Int, packages: List<String>) {
-        val config = Config.get(context)
-        if (!config.autoLock() || packages.isEmpty()) {
-            return
+    /**
+     * 启动成功后调用：记录本次要保护的包，返回「是否需要等一下再锁」。
+     *
+     * 真正的等待交给 [holdAndFire] 在调用方所在的线程（前台服务里）完成——
+     * 真机实测：任务跑完后进程会在 1~2 秒内被厂商省电策略冻结，
+     * 此时再 rop 一个闹钟或另起服务都会被推迟到几分钟后，5 秒就变成几分钟。
+     */
+    fun arm(context: Context, delaySec: Int, packages: List<String>): Boolean {
+        if (delaySec <= 0 || packages.isEmpty()) {
+            return false
+        }
+        if (!Config.get(context).autoLock()) {
+            return false
         }
         savePkgs(context, packages)
-        val delay = delaySec.coerceAtLeast(2)
-        // 首选：前台服务里原地计时。真机上「后台 + 精确闹钟」会被厂商省电策略推迟，
-        // 5 秒会变成几分钟，必须靠前台服务保住计时精度。
-        if (RunService.startLockDelay(context, delay)) {
-            return
-        }
-        val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        val at = System.currentTimeMillis() + delay * 1000L
-        val pi = intent(context)
+        return true
+    }
+
+    /**
+     * 原地等 N 秒再判断要不要锁屏。
+     *
+     * 必须由仍在执行中的前台服务线程调用：只要服务还是前台状态，
+     * 进程不会被冻结，计时精度就和用户手点一样准。
+     */
+    fun holdAndFire(context: Context) {
+        val delay = Config.get(context).autoLockDelay()
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
-                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
-            } else {
-                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
-            }
-        } catch (e: SecurityException) {
-            try {
-                am.set(AlarmManager.RTC_WAKEUP, at, pi)
-            } catch (t: Throwable) {
-                LogStore.append(context, "排自动锁屏闹钟失败: $t\n")
-            }
-        } catch (t: Throwable) {
-            LogStore.append(context, "排自动锁屏闹钟失败: $t\n")
+            Thread.sleep(delay.coerceAtLeast(2) * 1000L)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
+        fire(context)
     }
 
     fun cancel(context: Context) {

@@ -59,8 +59,8 @@ class RunService : Service() {
                     ACTION_EXPIRE -> RunCoordinator.expirePending(this)
                     ACTION_LOCK -> AutoLock.fire(this)
                     ACTION_LOCK_DELAY -> {
-                        // 在服务里原地等到点再锁：进程保持前台优先级，
-                        // 不会被厂商省电策略冻结掉那个「5 秒」闹钟
+                        // 等秒数落在本服务里：进程保持前台优先级，
+                        // 不会被厂商省电策略把「5 秒」拉成几分钟
                         sleep(delaySec.coerceAtLeast(2) * 1000L)
                         AutoLock.fire(this)
                     }

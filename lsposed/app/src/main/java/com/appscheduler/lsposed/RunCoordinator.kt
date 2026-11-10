@@ -119,8 +119,11 @@ object RunCoordinator {
         if (!ok) {
             TaskRunner.notifyFailure(context, log.toString())
         } else {
-            // 启动成功后按设置排一次「无操作就锁屏」，把屏幕重新收回去
-            AutoLock.arm(context, config.autoLockDelay(), runnable)
+            // 启动成功后按设置排一次「无操作就锁屏」，把屏幕重新收回去；
+            // 等秒数必须在本前台服务里原地等，交给系统闹钟会被省电策略推迟
+            if (AutoLock.arm(context, config.autoLockDelay(), runnable)) {
+                AutoLock.holdAndFire(context)
+            }
         }
         applyResult(context, task, ok)
     }
@@ -169,8 +172,8 @@ object RunCoordinator {
             LogStore.append(context, log.toString())
             if (!ok) {
                 TaskRunner.notifyFailure(context, log.toString())
-            } else {
-                AutoLock.arm(context, Config.get(context).autoLockDelay(), runnable)
+            } else if (AutoLock.arm(context, Config.get(context).autoLockDelay(), runnable)) {
+                AutoLock.holdAndFire(context)
             }
             PendingStore.remove(context, entry.taskId)
             applyResult(context, task, ok)
