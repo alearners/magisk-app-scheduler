@@ -138,7 +138,6 @@ fun TaskListScreen(
                 value = password,
                 onValueChange = onPasswordChange,
                 label = { Text("锁屏密码") },
-                supportingText = { Text("优先由 LSPosed 钩子收起锁屏，失败才注入密码") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
