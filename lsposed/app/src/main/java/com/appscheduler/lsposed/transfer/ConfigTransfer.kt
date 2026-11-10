@@ -65,7 +65,7 @@ object ConfigTransfer {
     /** 先校验、只数数量，不落盘：给界面弹确认框用 */
     fun inspect(text: String): Result {
         val parsed = parse(text)
-        if (!parsed.ok) return parsed
+        if (!parsed.ok) return Result(false, parsed.message)
         return Result(true, "配置来自 ${parsed.message}", parsed.taskCount)
     }
 
@@ -75,7 +75,7 @@ object ConfigTransfer {
      */
     fun importJson(context: Context, text: String): Result {
         val parsed = parse(text)
-        if (!parsed.ok) return parsed
+        if (!parsed.ok) return Result(false, parsed.message)
         val payload = parsed.payload ?: return Result(false, "配置内容为空")
         val tasks = payload.tasks
         if (tasks.isEmpty() && payload.hasTasksArray.not()) {
