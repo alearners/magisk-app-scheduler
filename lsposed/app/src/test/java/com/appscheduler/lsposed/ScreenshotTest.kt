@@ -1,5 +1,6 @@
 package com.appscheduler.lsposed
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -9,9 +10,19 @@ import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.appscheduler.lsposed.apps.AppEntry
 import com.appscheduler.lsposed.model.TaskItem
+import com.appscheduler.lsposed.permissions.PermAction
+import com.appscheduler.lsposed.permissions.PermRow
+import com.appscheduler.lsposed.permissions.PermStatus
+import com.appscheduler.lsposed.ui.AboutInfo
 import com.appscheduler.lsposed.ui.AppPickerScreen
 import com.appscheduler.lsposed.ui.AppSchedulerTheme
+import com.appscheduler.lsposed.ui.BottomTabBar
+import com.appscheduler.lsposed.ui.HelpPage
+import com.appscheduler.lsposed.ui.HelpScreen
 import com.appscheduler.lsposed.ui.LogScreen
+import com.appscheduler.lsposed.ui.LogTab
+import com.appscheduler.lsposed.ui.MainTab
+import com.appscheduler.lsposed.ui.PermissionScreen
 import com.appscheduler.lsposed.ui.TaskEditScreen
 import com.appscheduler.lsposed.ui.TaskListScreen
 import org.junit.Rule
@@ -19,7 +30,7 @@ import org.junit.Test
 
 /**
  * 用 Paparazzi（layoutlib）在 JVM 上渲染真实 Compose 界面，输出 README 用截图。
- * 运行：./gradlew :app:recordPaparazziDebug
+ * 运行：gradle -p lsposed :app:recordPaparazziDebug
  * 产物：app/src/test/snapshots/images 目录下的 PNG
  */
 class ScreenshotTest {
@@ -46,6 +57,53 @@ class ScreenshotTest {
         [11-08 12:03] 启动 com.example.cloud 成功
     """.trimIndent()
 
+    private val rotatedLog = """
+        [11-07 21:30] 计划「早间自动签到」开始，共 2 个应用
+        [11-07 21:31] 启动 com.example.notes 成功
+        [11-07 22:00] 条件不满足（未插电），本次跳过
+        [11-07 23:00] 已排下一次：11-08 07:30
+    """.trimIndent()
+
+    private val permRows = listOf(
+        PermRow(
+            key = "notification",
+            title = "通知权限",
+            detail = "「请手动解锁」「执行失败」这类提醒都靠它。Android 13 起需要在系统弹窗里允许。",
+            status = PermStatus.OK,
+            extra = "已允许"
+        ),
+        PermRow(
+            key = "exact_alarm",
+            title = "精确闹钟",
+            detail = "没这个权限，系统只能用非精确闹钟，触发可能推迟几分钟才执行。",
+            status = PermStatus.MISSING,
+            actionLabel = "去授予",
+            action = PermAction.EXACT_ALARM
+        ),
+        PermRow(
+            key = "battery",
+            title = "省电白名单",
+            detail = "被系统电池优化限制时，闹钟可能被推迟甚至被丢进「后台受限」里。",
+            status = PermStatus.OK,
+            extra = "已不限制"
+        ),
+        PermRow(
+            key = "root",
+            title = "root 权限",
+            detail = "解锁（上滑/密码注入）、强制停止与启动应用、加入省电白名单都要用 root。",
+            status = PermStatus.OK,
+            extra = "已验证 uid=0(root) gid=0(root)"
+        ),
+        PermRow(
+            key = "lsposed",
+            title = "LSPosed 模块",
+            detail = "本模块要在 LSPosed 里勾选并作用到「系统界面」，锁屏才能真正被收起。App 自身无法判断是否已生效。",
+            status = PermStatus.UNKNOWN,
+            actionLabel = "打开 LSPosed 管理器",
+            action = PermAction.LSPOSED
+        )
+    )
+
     private val listTasks = listOf(
         TaskItem(
             id = 1L,
@@ -70,6 +128,7 @@ class ScreenshotTest {
         ),
         TaskItem(
             id = 3L,
+            name = "每周一三五",
             packages = mutableListOf("com.example.clock"),
             scheduleType = TaskItem.TYPE_WEEKLY,
             weekdays = mutableSetOf(1, 3, 5),
@@ -81,26 +140,30 @@ class ScreenshotTest {
     @Test
     fun planList() = paparazzi.snapshot(name = "01-plan-list") {
         Scene {
-            TaskListScreen(
-                tasks = listTasks,
-                masterEnabled = true,
-                onMasterEnabledChange = {},
-                nextRunText = "11-08 21:30 · 早间自动签到",
-                onAdd = {},
-                onEdit = {},
-                onDelete = {},
-                onToggle = { _, _ -> },
-                onRunNow = {},
-                runningId = null,
-                password = "",
-                onPasswordChange = {},
-                manualFallback = true,
-                onManualFallbackChange = {},
-                manualWait = "180",
-                onManualWaitChange = {},
-                onSaveSettings = {},
-                onOpenLog = {}
-            )
+            Column(Modifier.fillMaxSize()) {
+                TaskListScreen(
+                    tasks = listTasks,
+                    masterEnabled = true,
+                    onMasterEnabledChange = {},
+                    nextRunText = "11-08 21:30 · 早间自动签到",
+                    onAdd = {},
+                    onEdit = {},
+                    onDelete = {},
+                    onToggle = { _, _ -> },
+                    onRunNow = {},
+                    runningId = null,
+                    password = "",
+                    onPasswordChange = {},
+                    manualFallback = true,
+                    onManualFallbackChange = {},
+                    manualWait = "180",
+                    onManualWaitChange = {},
+                    onSaveSettings = {},
+                    onOpenLog = {},
+                    modifier = Modifier.weight(1f)
+                )
+                BottomTabBar(selected = MainTab.CONFIG, onSelect = {})
+            }
         }
     }
 
@@ -170,9 +233,92 @@ class ScreenshotTest {
     }
 
     @Test
-    fun log() = paparazzi.snapshot(name = "05-run-log") {
+    fun logCurrent() = paparazzi.snapshot(name = "05-log-current") {
         Scene {
-            LogScreen(log = demoLog, onBack = {}, onRefresh = {}, onClear = {})
+            Column(Modifier.fillMaxSize()) {
+                LogScreen(
+                    current = demoLog,
+                    all = rotatedLog + "\n" + demoLog,
+                    tab = LogTab.CURRENT,
+                    onSelectTab = {},
+                    onRefresh = {},
+                    onClearCurrent = {},
+                    onClearAll = {},
+                    modifier = Modifier.weight(1f)
+                )
+                BottomTabBar(selected = MainTab.LOG, onSelect = {})
+            }
+        }
+    }
+
+    @Test
+    fun logAll() = paparazzi.snapshot(name = "06-log-all") {
+        Scene {
+            LogScreen(
+                current = demoLog,
+                all = rotatedLog + "\n...(以上为已轮转的旧日志，以下是当前日志)\n" + demoLog,
+                tab = LogTab.ALL,
+                onSelectTab = {},
+                onRefresh = {},
+                onClearCurrent = {},
+                onClearAll = {}
+            )
+        }
+    }
+
+    @Test
+    fun permission() = paparazzi.snapshot(name = "07-permission") {
+        Scene {
+            Column(Modifier.fillMaxSize()) {
+                PermissionScreen(
+                    rows = permRows,
+                    checking = false,
+                    onRecheck = {},
+                    onAction = {},
+                    modifier = Modifier.weight(1f)
+                )
+                BottomTabBar(selected = MainTab.PERM, onSelect = {})
+            }
+        }
+    }
+
+    @Test
+    fun helpHome() = paparazzi.snapshot(name = "08-help") {
+        Scene {
+            Column(Modifier.fillMaxSize()) {
+                HelpScreen(
+                    page = HelpPage.HOME,
+                    about = AboutInfo(),
+                    onOpen = {},
+                    onBack = {},
+                    modifier = Modifier.weight(1f)
+                )
+                BottomTabBar(selected = MainTab.HELP, onSelect = {})
+            }
+        }
+    }
+
+    @Test
+    fun helpAbout() = paparazzi.snapshot(name = "09-about") {
+        Scene {
+            HelpScreen(
+                page = HelpPage.ABOUT,
+                about = AboutInfo(),
+                onOpen = {},
+                onBack = {}
+            )
+        }
+    }
+
+    @Test
+    fun helpConfigDoc() = paparazzi.snapshot(name = "10-config-doc") {
+        Scene {
+            HelpScreen(
+                page = HelpPage.CONFIG_DOC,
+                about = AboutInfo(),
+                onOpen = {},
+                onBack = {}
+            )
         }
     }
 

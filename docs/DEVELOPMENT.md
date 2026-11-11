@@ -51,6 +51,32 @@
 
 `lsposed` 分支额外包含 `lsposed/`（Gradle 工程）与 `.github/workflows/build-lsposed-apk.yml`。
 
+LSPosed 版的界面用 Compose 实现，页面统一挂在底部菜单栏上：
+
+```
+ui/
+├── MainScreen.kt        # 状态与路由：tab 切换、权限动作分发、日志刷新
+├── BottomBar.kt         # 底部菜单栏（配置 / 日志 / 权限 / 帮助）
+├── TaskListScreen.kt    # 配置页：计划列表 + 全局设置 + 配置备份
+├── TaskEditScreen.kt    # 计划编辑（整屏子页面，不进底部栏）
+├── AppPickerScreen.kt   # 选择应用（整屏子页面）
+├── LogScreen.kt         # 日志页：当前日志 / 所有日志，分别清除
+├── PermissionScreen.kt  # 权限页：纯展示，判定在 permissions/PermissionAudit.kt
+└── HelpScreen.kt        # 帮助 / 配置说明 / 关于本软件
+```
+
+权限页刻意把「判定」与「展示」拆开：`PermissionAudit` 只读状态、不弹授权框，`PermissionScreen` 只根据传入的 `PermRow` 列表渲染，因此截图测试可以注入固定的 OK / MISSING / UNKNOWN 三态而不受真机环境影响。
+
+界面截图由 Paparazzi 在 JVM 上渲染真实 Compose 界面生成，不需要模拟器或真机：
+
+```bash
+cd lsposed
+./gradlew :app:recordPaparazziDebug
+# 产物：app/src/test/snapshots/images/，按 01-plan-list … 10-config-doc 命名
+```
+
+改完界面后把新 PNG 覆盖到仓库根的 `docs/screenshots/` 即可，README 里的图片链接不用动。
+
 打包要求：
 
 - 所有 `.sh` 权限 755，`module.prop` 与 `updater-script` 为 644；
