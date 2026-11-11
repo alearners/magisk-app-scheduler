@@ -90,7 +90,18 @@ if [ -f "$MODDIR/timer.pid" ]; then
     kill "$(cat "$MODDIR/timer.pid" 2>/dev/null)" 2>/dev/null
     rm -f "$MODDIR/timer.pid"
 fi
+
+# 旧 crond：新版 BusyBox 的进程名是 busybox，pkill 按名字匹配不到，需要按命令行再找一遍
 pkill crond 2>/dev/null
+for d in /proc/[0-9]*; do
+    [ -r "$d/cmdline" ] || continue
+    _pid=${d#/proc/}
+    [ "$_pid" = "$$" ] && continue
+    _cmd=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null)
+    case "$_cmd" in
+        *"crond -c"*|*"crond -b"*|*"crond -f"*) kill "$_pid" 2>/dev/null ;;
+    esac
+done
 sleep 1
 
 # service.sh 会等 sys.boot_completed 再按新配置起 crond / 内部计时循环；放后台跑，脚本立即返回

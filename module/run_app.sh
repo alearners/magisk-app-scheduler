@@ -85,31 +85,37 @@ if [ -f "$LOG_FILE" ]; then
 fi
 
 # ---------- 单实例锁（避免上一轮未结束时重叠执行） ----------
+# 用 mkdir 做原子锁：不依赖 fd 继承。部分 ROM 上 flock 传 fd（flock -n 9）会报
+# 「Bad file descriptor」（toybox flock 与 BusyBox flock 都一样），会把每次执行
+# 都误判成「上一轮仍在跑」而直接跳过，故不再使用 flock。
 LOCK_FILE=/data/local/tmp/apptimer.lock
 LOCK_DIR="${LOCK_FILE}.d"
 HOLD_DIR_LOCK=0
 
 release_lock() {
     if [ "$HOLD_DIR_LOCK" = "1" ]; then
-        rmdir "$LOCK_DIR" 2>/dev/null
+        rm -rf "$LOCK_DIR" 2>/dev/null
         HOLD_DIR_LOCK=0
     fi
 }
 trap 'release_lock' EXIT
 
-if command -v flock >/dev/null 2>&1; then
-    exec 9>"$LOCK_FILE"
-    if ! flock -n 9; then
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    # 锁目录已存在：判断持有者是否还活着，进程已消失则视为残留锁，清掉重抢一次
+    OLD_LOCK_PID=$(cat "$LOCK_DIR/pid" 2>/dev/null)
+    if [ -n "$OLD_LOCK_PID" ] && ! kill -0 "$OLD_LOCK_PID" 2>/dev/null; then
+        rm -rf "$LOCK_DIR" 2>/dev/null
+        if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+            log "上一次任务仍在执行，本次跳过"
+            exit 0
+        fi
+    else
         log "上一次任务仍在执行，本次跳过"
         exit 0
     fi
-else
-    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-        log "上一次任务仍在执行，本次跳过（锁目录已存在，必要时手动删除 $LOCK_DIR）"
-        exit 0
-    fi
-    HOLD_DIR_LOCK=1
 fi
+echo $$ > "$LOCK_DIR/pid" 2>/dev/null
+HOLD_DIR_LOCK=1
 
 START_TS=$(date +%s)
 

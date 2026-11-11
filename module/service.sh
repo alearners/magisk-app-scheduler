@@ -8,6 +8,30 @@
 umask 022
 export PATH=/data/adb/magisk:/system/bin:/system/xbin:/sbin:/vendor/bin:/product/bin
 
+# ---------- crond 进程识别 ----------
+# 新版 Magisk 自带的 BusyBox 把 crond 的进程名显示为 busybox / libbusybox.so，
+# 此时 pidof、pkill 都会按名字匹配失败：表现为「crond 启动失败」误报，
+# 以及旧 crond 杀不掉而越积越多。这里改为按完整命令行匹配。
+crond_pids() {
+    for d in /proc/[0-9]*; do
+        [ -r "$d/cmdline" ] || continue
+        _pid=${d#/proc/}
+        [ "$_pid" = "$$" ] && continue
+        _cmd=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null)
+        case "$_cmd" in
+            *"crond -c"*|*"crond -b"*|*"crond -f"*) echo "$_pid" ;;
+        esac
+    done
+}
+
+kill_crond() {
+    # 两条路径都试：名字能匹配到的设备用 pkill，匹配不到的用 crond_pids
+    pkill crond 2>/dev/null
+    for _p in $(crond_pids); do
+        kill "$_p" 2>/dev/null
+    done
+}
+
 MODDIR=${0%/*}
 CONFIG_FILE="$MODDIR/config.sh"
 
@@ -62,7 +86,7 @@ if [ "$TIMER_MODE" = "internal" ]; then
     esac
     [ "$INTERVAL_MINUTES" -lt 1 ] && INTERVAL_MINUTES=1
     INTERVAL_SEC=$((INTERVAL_MINUTES * 60))
-    pkill crond 2>/dev/null
+    kill_crond
     log "计时方式：内部计时器，每 ${INTERVAL_MINUTES} 分钟执行一次（未启动 crond）"
     ( while :; do
           sleep "$INTERVAL_SEC"
@@ -123,18 +147,24 @@ while IFS= read -r line; do
 done < "$CRONTAB_FILE"
 
 # ---------- 清理旧 crond 后重新启动 ----------
-pkill crond 2>/dev/null
+kill_crond
 sleep 1
 
 "$BUSYBOX" crond -b -c "$CRONTAB_DIR" -l 2
+CROND_BG_EXIT=$?
 sleep 2
 
-CROND_PID=$("$BUSYBOX" pidof crond 2>/dev/null)
-if [ -z "$CROND_PID" ]; then
-    log "crond 启动失败"
+set -- $(crond_pids)
+CROND_PID=${1:-}
+if [ -n "$CROND_PID" ]; then
+    log "crond 已启动 (pid $CROND_PID)，调度生效"
+elif [ "$CROND_BG_EXIT" -eq 0 ]; then
+    # /proc 对当前域不可读时拿不到进程号，退化为按启动返回码判断，避免误报失败
+    log "crond 已在后台启动（未能确认进程号：/proc 不可读，按启动返回码视为成功）"
+else
+    log "crond 启动失败（返回码 $CROND_BG_EXIT）"
     notify "crond 启动失败"
     exit 1
 fi
 
-log "crond 已启动 (pid $CROND_PID)，调度生效"
 log "=== 开机服务结束 ==="
