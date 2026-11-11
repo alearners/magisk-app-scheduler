@@ -114,7 +114,7 @@ object RunCoordinator {
             log.append("锁屏状态: false，直接启动\n")
         }
 
-        val ok = TaskRunner.launch(runnable, log)
+        val ok = TaskRunner.launch(runnable, config.forceColdStart(), log)
         LogStore.append(context, log.toString())
         if (!ok) {
             TaskRunner.notifyFailure(context, log.toString())
@@ -168,7 +168,7 @@ object RunCoordinator {
                 applyResult(context, task, false)
                 continue
             }
-            val ok = TaskRunner.launch(runnable, log)
+            val ok = TaskRunner.launch(runnable, Config.get(context).forceColdStart(), log)
             LogStore.append(context, log.toString())
             if (!ok) {
                 TaskRunner.notifyFailure(context, log.toString())
@@ -239,7 +239,7 @@ object RunCoordinator {
             TaskRunner.notifyFailure(context, log.toString())
             return false
         }
-        val ok = TaskRunner.launch(runnable, log)
+        val ok = TaskRunner.launch(runnable, config.forceColdStart(), log)
         LogStore.append(context, log.toString())
         if (!ok) {
             TaskRunner.notifyFailure(context, log.toString())

@@ -58,6 +58,8 @@ fun TaskListScreen(
     onAutoLockDelayChange: (String) -> Unit = {},
     timerMode: String = Config.TIMER_ALARM,
     onTimerModeChange: (String) -> Unit = {},
+    forceColdStart: Boolean = Config.DEFAULT_FORCE_COLD_START,
+    onForceColdStartChange: (Boolean) -> Unit = {},
     onSaveSettings: () -> Unit,
     onOpenLog: () -> Unit,
     onOpenHelp: () -> Unit = {},
@@ -160,6 +162,19 @@ fun TaskListScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            SwitchRow(
+                title = "启动前强制停止目标应用",
+                description = if (forceColdStart) {
+                    "开启：先结束该应用再启动，保证是全新进程、从头进入"
+                } else {
+                    "关闭：直接启动，已在后台的进程会被切回前台，界面留在原处"
+                },
+                checked = forceColdStart,
+                onCheckedChange = onForceColdStartChange
+            )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 

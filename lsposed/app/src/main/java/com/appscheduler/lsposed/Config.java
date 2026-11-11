@@ -21,6 +21,8 @@ public class Config {
     public static final String KEY_AUTO_LOCK_DELAY = "auto_lock_delay";
     /** 调度触发的时间基准：系统闹钟（alarm）或应用内部计时器（internal） */
     public static final String KEY_TIMER_MODE = "timer_mode";
+    /** 解锁后启动目标应用的方式：true 先强制停止再启动（冷启动），false 直接启动 / 切回已运行的进程 */
+    public static final String KEY_FORCE_COLD_START = "force_cold_start";
 
     public static final String DEFAULT_PKG = "com.example.app";
     /** 不预置任何密码，必须在界面里填写；留空时跳过密码注入，只走上滑 + 兜底 */
@@ -34,6 +36,9 @@ public class Config {
     public static final String TIMER_ALARM = "alarm";
     public static final String TIMER_INTERNAL = "internal";
     public static final String DEFAULT_TIMER_MODE = TIMER_ALARM;
+
+    /** 默认保持原有行为：先强制停止再启动，保证是冷启动 */
+    public static final boolean DEFAULT_FORCE_COLD_START = true;
 
     private final SharedPreferences sp;
 
@@ -117,6 +122,15 @@ public class Config {
         return TIMER_INTERNAL.equals(timerMode());
     }
 
+    /**
+     * 解锁后启动目标应用时，是否先强制停止。
+     * true：先 am force-stop 再启动，保证是冷启动；
+     * false：直接启动 / 把已有的任务切回前台，保留原进程与界面状态。
+     */
+    public boolean forceColdStart() {
+        return sp.getBoolean(KEY_FORCE_COLD_START, DEFAULT_FORCE_COLD_START);
+    }
+
     public void save(String pkg, String password, String times, boolean enabled) {
         sp.edit()
                 .putString(KEY_PKG, pkg == null ? "" : pkg.trim())
@@ -152,7 +166,8 @@ public class Config {
     }
 
     public void saveGlobal(boolean enabled, String password, boolean manualFallback, int manualWait,
-                           boolean autoLock, int autoLockDelay, String timerMode) {
+                           boolean autoLock, int autoLockDelay, String timerMode,
+                           boolean forceColdStart) {
         sp.edit()
                 .putBoolean(KEY_ENABLED, enabled)
                 .putString(KEY_PASSWORD, password == null ? "" : password.trim())
@@ -161,6 +176,7 @@ public class Config {
                 .putBoolean(KEY_AUTO_LOCK, autoLock)
                 .putInt(KEY_AUTO_LOCK_DELAY, autoLockDelay)
                 .putString(KEY_TIMER_MODE, TIMER_INTERNAL.equals(timerMode) ? TIMER_INTERNAL : TIMER_ALARM)
+                .putBoolean(KEY_FORCE_COLD_START, forceColdStart)
                 .apply();
     }
 }

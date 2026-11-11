@@ -81,27 +81,22 @@ public class TaskRunner {
         return runnable;
     }
 
-    /** 强制停止并逐个启动，解锁已在此之前完成 */
-    public static boolean launch(List<String> runnable, StringBuilder log) {
+    /**
+     * 逐个启动应用，解锁已在此之前完成。
+     *
+     * @param forceColdStart true 先强制停止再启动（冷启动）；false 直接启动，已运行的进程会被切回前台
+     */
+    public static boolean launch(List<String> runnable, boolean forceColdStart, StringBuilder log) {
         boolean allOk = true;
         for (String pkg : runnable) {
-            su("am force-stop " + pkg);
-            log.append("已强制停止 ").append(pkg).append('\n');
-
-            Result monkey = su("monkey -p " + pkg + " -c android.intent.category.LAUNCHER 1");
-            boolean ok = monkey.code == 0;
-            if (ok) {
-                log.append("已通过 monkey 启动 ").append(pkg).append('\n');
+            boolean ok;
+            if (forceColdStart) {
+                su("am force-stop " + pkg);
+                log.append("已强制停止 ").append(pkg).append("，准备冷启动\n");
+                ok = launchByMonkey(pkg, log);
             } else {
-                String resolved = resolveLauncherActivity(pkg);
-                if (resolved != null) {
-                    Result start = su("am start -n " + resolved);
-                    ok = start.code == 0;
-                    log.append(ok ? ("已通过 am start 启动 " + resolved + "\n")
-                            : ("am start 失败: " + resolved + "\n"));
-                } else {
-                    log.append("无法解析启动 Activity: ").append(pkg).append('\n');
-                }
+                log.append("不强制停止 ").append(pkg).append("，直接启动\n");
+                ok = launchDirect(pkg, log);
             }
             if (!ok) {
                 allOk = false;
@@ -109,6 +104,43 @@ public class TaskRunner {
             sleep(600);
         }
         return allOk;
+    }
+
+    /** 冷启动：monkey 拉起 Launcher Activity，失败再按 resolved 组件启动 */
+    private static boolean launchByMonkey(String pkg, StringBuilder log) {
+        Result monkey = su("monkey -p " + pkg + " -c android.intent.category.LAUNCHER 1");
+        if (monkey.code == 0) {
+            log.append("已通过 monkey 启动 ").append(pkg).append('\n');
+            return true;
+        }
+        String resolved = resolveLauncherActivity(pkg);
+        if (resolved != null) {
+            Result start = su("am start -n " + resolved);
+            boolean ok = start.code == 0;
+            log.append(ok ? ("已通过 am start 启动 " + resolved + "\n")
+                    : ("am start 失败: " + resolved + "\n"));
+            return ok;
+        }
+        log.append("无法解析启动 Activity: ").append(pkg).append('\n');
+        return false;
+    }
+
+    /**
+     * 直接启动：优先 am start 目标 Activity——应用还在后台时这是「切回前台」，
+     * 进程和界面状态都保留；解析不到组件时退回 monkey。
+     */
+    private static boolean launchDirect(String pkg, StringBuilder log) {
+        String resolved = resolveLauncherActivity(pkg);
+        if (resolved != null) {
+            Result start = su("am start -n " + resolved);
+            boolean ok = start.code == 0;
+            log.append(ok ? ("已切到前台或新开 " + resolved + "\n")
+                    : ("am start 失败: " + resolved + "\n"));
+            if (ok) {
+                return true;
+            }
+        }
+        return launchByMonkey(pkg, log);
     }
 
     /**
