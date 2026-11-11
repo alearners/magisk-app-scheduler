@@ -144,7 +144,8 @@ su -c sh /data/adb/modules/app_scheduler/config_import.sh /sdcard/AppTimer/appti
 # Magisk 版
 su -c sh /data/adb/modules/app_scheduler/run_app.sh        # 立即跑一次
 cat /data/local/tmp/apptimer.log                            # 看日志
-ps -A | grep crond                                          # cron 模式是否在跑
+ps -A | grep crond                                          # cron 模式是否在跑（部分 ROM 进程名显示为 busybox，可改用下一行）
+grep -la crond /proc/[0-9]*/cmdline 2>/dev/null             # 上面看不到 crond 时，用命令行精确确认
 cat /data/adb/modules/app_scheduler/crontab_dir/root        # 生成的 crontab
 dumpsys window | grep -i keyguard                           # 锁屏状态自检
 

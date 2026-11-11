@@ -13,7 +13,7 @@
 
 1. 读取 `config.sh`；
 2. 检查日志大小，超过上限按配置份数轮转；
-3. 获取单实例锁（`flock`，不可用时退化为 `mkdir` 锁目录）；
+3. 获取单实例锁（`mkdir` 原子锁目录，锁目录内写持有者 pid）；
 4. `am force-stop` 强制停止目标 App；
 5. 检测设备是否锁屏（`dumpsys window policy`）；
 6. 若锁屏：唤醒屏幕 → `wm dismiss-keyguard` 尝试直接收起锁屏 → 未解锁则按分辨率比例上滑调出密码盘 → 输入密码 → 回车确认；
@@ -111,7 +111,9 @@
 
 ### 4.4 单实例锁
 
-优先 `flock -n`（fd 9），不可用时退化为 `mkdir` 锁目录，并通过 `trap` 在退出时 `rmdir`。锁冲突直接跳过本轮，避免上一轮未结束时叠加执行。
+使用 `mkdir` 原子锁目录（`/data/local/tmp/apptimer.lock.d`），锁目录内写入持有者 pid，退出时通过 `trap` 清理；再次抢锁失败且原持有者进程已不存在时，视为残留锁自动清理后重抢一次。锁冲突直接跳过本轮，避免上一轮未结束时叠加执行。
+
+不使用 `flock`：真机（Magisk 31000 + HyperOS，toybox `flock` 与 BusyBox `flock` 均如此）执行 `exec 9>lock; flock -n 9` 会报 `Bad file descriptor`，导致每次执行都被误判为「上一轮仍在执行」而跳过，cron 模式下 App 永远不会被启动（v2.1.0 的缺陷，v2.1.1 已修）。
 
 ### 4.5 锁屏判断
 
