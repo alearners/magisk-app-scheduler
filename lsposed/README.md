@@ -77,7 +77,7 @@ JSON 结构（`schema=1`）：
 | --- | --- |
 | applicationId | `com.appscheduler.lsposed` |
 | 显示名 | `AppTimer` |
-| 版本 | `versionCode 23` / `versionName 2.2.1` |
+| 版本 | `versionCode 24` / `versionName 2.2.2` |
 | 最低支持 | Android 8.0（API 26） |
 | 目标 SDK | 34 |
 | 签名 | 仓库固定密钥（`CN=App Scheduler, O=alearners, C=CN`），证书 SHA-256 `10948BFB9…000B2E5` |

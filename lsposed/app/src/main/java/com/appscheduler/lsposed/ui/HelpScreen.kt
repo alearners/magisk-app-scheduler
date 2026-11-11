@@ -35,8 +35,8 @@ enum class HelpPage(val title: String) {
 /** 关于页要展示的软件信息，由调用方填，方便截图测试注入固定值 */
 data class AboutInfo(
     val appName: String = "AppTimer",
-    val versionName: String = "2.2.1",
-    val versionCode: Long = 23,
+    val versionName: String = "2.2.2",
+    val versionCode: Long = 24,
     val packageName: String = "com.appscheduler.lsposed",
     val minSdk: Int = 26,
     val repoUrl: String = "https://github.com/alearners/magisk-app-scheduler",
