@@ -19,7 +19,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,9 +59,8 @@ fun TaskListScreen(
     timerMode: String = Config.TIMER_ALARM,
     onTimerModeChange: (String) -> Unit = {},
     onSaveSettings: () -> Unit,
-    onExportConfig: () -> Unit = {},
-    onImportConfig: () -> Unit = {},
     onOpenLog: () -> Unit,
+    onOpenHelp: () -> Unit = {},
     exactAlarmGranted: Boolean = true,
     onRequestExactAlarm: () -> Unit = {},
     batteryIgnored: Boolean = true,
@@ -229,23 +227,13 @@ fun TaskListScreen(
 
         SectionCard("配置备份") {
             Text(
-                "把全部计划与全局设置导出成一个 JSON 文件（文件名带时间戳），换机、重装系统后导入即可恢复。",
+                "导出与导入放在「帮助」页，避免在计划列表里误触覆盖。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onExportConfig, modifier = Modifier.weight(1f)) {
-                    Text("导出配置")
-                }
-                OutlinedButton(onClick = onImportConfig, modifier = Modifier.weight(1f)) {
-                    Text("导入配置")
-                }
+            TextButton(onClick = { onOpenHelp() }, modifier = Modifier.fillMaxWidth()) {
+                Text("去帮助页导出 / 导入配置 ›")
             }
-            Text(
-                "注意：文件里含明文锁屏密码，别随手发给别人；导入会覆盖当前的全部计划与全局设置。",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
         TextButton(onClick = onOpenLog, modifier = Modifier.fillMaxWidth()) {

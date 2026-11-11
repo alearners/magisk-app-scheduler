@@ -94,6 +94,23 @@ fun LogScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
+        // 清除按钮放在日志框上方：横屏只有 369dp 高时，按钮也不会被挤出屏幕
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TextButton(
+                onClick = { confirm = LogTab.CURRENT },
+                modifier = Modifier.weight(1f)
+            ) { Text("清除当前日志") }
+            TextButton(
+                onClick = { confirm = LogTab.ALL },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("清除所有日志", color = MaterialTheme.colorScheme.error)
+            }
+        }
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -125,22 +142,6 @@ fun LogScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            TextButton(
-                onClick = { confirm = LogTab.CURRENT },
-                modifier = Modifier.weight(1f)
-            ) { Text("清除当前日志") }
-            TextButton(
-                onClick = { confirm = LogTab.ALL },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("清除所有日志", color = MaterialTheme.colorScheme.error)
             }
         }
     }

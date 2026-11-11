@@ -29,7 +29,8 @@ enum class PermAction {
     BATTERY,                // root 加白，失败再跳系统页
     ROOT,                   // 触发一次 su，让 Magisk 弹授权
     LSPOSED,                // 打开 LSPosed 管理器
-    APP_DETAILS             // 打开本应用详情页
+    APP_DETAILS,            // 打开本应用详情页
+    PACKAGE_CHECK           // 由用户主动点一次「读应用列表」（某些系统这时才会弹授权框）
 }
 
 data class PermRow(
@@ -46,12 +47,21 @@ data class PermRow(
 /**
  * 权限体检：只做判定，不主动弹任何系统框。
  * 真正「申请」由界面根据 [PermAction] 触发，避免每次进页面都打扰用户。
+ *
+ * 注意：这里**不能**在检测阶段去查已安装应用列表。HyperOS / MIUI 上第一次查询包列表会弹
+ * 「取得已安装的应用程式资讯」授权框，与「进页面只读状态、不弹框」的约定冲突。
+ * 所以「读取应用列表」这一项只读缓存结果，要查也得由用户点「现在检查」触发。
  */
 object PermissionAudit {
 
     private const val AUDIT_PREFS = "apptimer_audit"
     private const val KEY_ROOT_VERIFIED = "root_verified"
     private const val KEY_ROOT_UID = "root_uid"
+    private const val KEY_PKG_COUNT = "pkg_count"
+    private const val KEY_PKG_CHECKED_AT = "pkg_checked_at"
+
+    /** 认为是「读得到应用列表」的最小数量，低于它基本可以判定被限制了 */
+    private const val PKG_COUNT_OK = 10
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(AUDIT_PREFS, Context.MODE_PRIVATE)
@@ -230,22 +240,66 @@ object PermissionAudit {
 
     // ---------------- 应用列表 ----------------
 
+    /**
+     * 只读缓存，不查 PackageManager：查询包列表本身就会触发系统授权框。
+     * 缓存由「选择应用」页真正取过一次列表时写入（见 [recordPackageCount]）。
+     */
     private fun packageQueryRow(context: Context): PermRow {
-        val count = try {
-            context.packageManager.getInstalledApplications(0).size
-        } catch (t: Throwable) {
-            0
+        val count = prefs(context).getInt(KEY_PKG_COUNT, -1)
+        return when {
+            count >= PKG_COUNT_OK -> PermRow(
+                key = "packages",
+                title = "读取应用列表",
+                detail = "用来在「选择应用」里列出已安装的应用；当前可以正常读取。",
+                status = PermStatus.OK,
+                extra = "可见 $count 个应用"
+            )
+
+            count >= 0 -> PermRow(
+                key = "packages",
+                title = "读取应用列表",
+                detail = "只读到 $count 个应用，基本等于被系统限制了：去应用详情里允许「读取应用列表 / 取得已安装应用资讯」。",
+                status = PermStatus.MISSING,
+                actionLabel = "打开应用详情",
+                action = PermAction.APP_DETAILS
+            )
+
+            else -> PermRow(
+                key = "packages",
+                title = "读取应用列表",
+                detail = "还没读过应用列表。点「现在检查」读一次；部分系统（HyperOS、MIUI）这时会弹一次「取得已安装的应用程式资讯」，允许后「选择应用」才能看到全部应用。",
+                status = PermStatus.UNKNOWN,
+                actionLabel = "现在检查",
+                action = PermAction.PACKAGE_CHECK
+            )
         }
-        val ok = count >= 10
-        return PermRow(
-            key = "packages",
-            title = "读取应用列表",
-            detail = "用来在「选择应用」里列出已安装的应用；被系统限制时列表会是空的。",
-            status = if (ok) PermStatus.OK else PermStatus.MISSING,
-            actionLabel = if (ok) null else "打开应用详情",
-            action = if (ok) null else PermAction.APP_DETAILS,
-            extra = if (ok) "可见 $count 个应用" else null
-        )
+    }
+
+    /** 由用户主动触发的一次应用列表读取；返回读到的数量，同时写进缓存 */
+    suspend fun checkPackages(context: Context): Int = withContext(Dispatchers.IO) {
+        val count = readLauncherCount(context)
+        recordPackageCount(context, count)
+        count
+    }
+
+    /** 选择应用页取过一次列表后回写，让权限页的状态与真实能力一致 */
+    fun recordPackageCount(context: Context, count: Int) {
+        prefs(context).edit()
+            .putInt(KEY_PKG_COUNT, count)
+            .putLong(KEY_PKG_CHECKED_AT, System.currentTimeMillis())
+            .apply()
+    }
+
+    private fun readLauncherCount(context: Context): Int = try {
+        val intent = android.content.Intent(android.content.Intent.ACTION_MAIN)
+            .addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+        context.packageManager.queryIntentActivities(intent, 0)
+            .mapNotNull { it.activityInfo?.packageName }
+            .filter { it != context.packageName }
+            .distinct()
+            .size
+    } catch (t: Throwable) {
+        0
     }
 
     // ---------------- LSPosed ----------------

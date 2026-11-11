@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.appscheduler.lsposed.apps.AppCatalog
 import com.appscheduler.lsposed.apps.AppEntry
+import com.appscheduler.lsposed.permissions.PermissionAudit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -43,7 +44,12 @@ fun AppPickerScreen(
     onConfirm: (List<String>) -> Unit,
     onBack: () -> Unit,
     // 应用列表来源，默认读系统已安装应用；截图测试可注入固定数据
-    appLoader: suspend (Context) -> List<AppEntry> = { AppCatalog.load(it) }
+    appLoader: suspend (Context) -> List<AppEntry> = { ctx ->
+        AppCatalog.load(ctx).also { loaded ->
+            // 这里才真正查了一次包列表，顺手把数量写进权限页的缓存
+            PermissionAudit.recordPackageCount(ctx, loaded.size)
+        }
+    }
 ) {
     val context = LocalContext.current
     var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }

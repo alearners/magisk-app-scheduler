@@ -212,6 +212,19 @@ fun MainScreen() {
                     toast("无法打开应用详情页")
                 }
             }
+
+            // 只有用户主动点这一下，才真去读一次应用列表（部分系统到这里才弹授权框）
+            PermAction.PACKAGE_CHECK -> {
+                scope.launch {
+                    val count = PermissionAudit.checkPackages(context)
+                    if (count >= 10) {
+                        toast("读到 $count 个应用，「选择应用」可以正常列出")
+                    } else {
+                        toast("只读到 $count 个应用：请在应用详情里允许「取得已安装应用资讯」")
+                    }
+                    recheckPermissions()
+                }
+            }
         }
     }
 
@@ -446,9 +459,8 @@ fun MainScreen() {
                             timerMode = timerMode,
                             onTimerModeChange = { timerMode = it },
                             onSaveSettings = { saveSettings() },
-                            onExportConfig = { exportLauncher.launch(ConfigTransfer.defaultFileName()) },
-                            onImportConfig = { importLauncher.launch(arrayOf("*/*")) },
                             onOpenLog = { tab = MainTab.LOG },
+                            onOpenHelp = { tab = MainTab.HELP },
                             exactAlarmGranted = exactAlarmGranted,
                             onRequestExactAlarm = { handlePermAction(PermAction.EXACT_ALARM) },
                             batteryIgnored = batteryIgnored,
@@ -503,7 +515,9 @@ fun MainScreen() {
                             page = helpPage,
                             about = about,
                             onOpen = { helpPage = it },
-                            onBack = { helpPage = HelpPage.HOME }
+                            onBack = { helpPage = HelpPage.HOME },
+                            onExportConfig = { exportLauncher.launch(ConfigTransfer.defaultFileName()) },
+                            onImportConfig = { importLauncher.launch(arrayOf("*/*")) }
                         )
                     }
                 }

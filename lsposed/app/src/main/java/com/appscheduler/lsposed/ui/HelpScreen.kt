@@ -13,9 +13,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,8 +35,8 @@ enum class HelpPage(val title: String) {
 /** 关于页要展示的软件信息，由调用方填，方便截图测试注入固定值 */
 data class AboutInfo(
     val appName: String = "AppTimer",
-    val versionName: String = "2.2.0",
-    val versionCode: Long = 22,
+    val versionName: String = "2.2.1",
+    val versionCode: Long = 23,
     val packageName: String = "com.appscheduler.lsposed",
     val minSdk: Int = 26,
     val repoUrl: String = "https://github.com/alearners/magisk-app-scheduler",
@@ -47,10 +49,18 @@ fun HelpScreen(
     about: AboutInfo,
     onOpen: (HelpPage) -> Unit,
     onBack: () -> Unit,
+    onExportConfig: () -> Unit = {},
+    onImportConfig: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     when (page) {
-        HelpPage.HOME -> HelpHome(onOpen = onOpen, modifier = modifier)
+        HelpPage.HOME -> HelpHome(
+            onOpen = onOpen,
+            onExportConfig = onExportConfig,
+            onImportConfig = onImportConfig,
+            modifier = modifier
+        )
+
         HelpPage.CONFIG_DOC -> ConfigDocPage(onBack = onBack, modifier = modifier)
         HelpPage.ABOUT -> AboutPage(about = about, onBack = onBack, modifier = modifier)
     }
@@ -61,7 +71,12 @@ fun HelpScreen(
 // ============================================================
 
 @Composable
-private fun HelpHome(onOpen: (HelpPage) -> Unit, modifier: Modifier = Modifier) {
+private fun HelpHome(
+    onOpen: (HelpPage) -> Unit,
+    onExportConfig: () -> Unit,
+    onImportConfig: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -91,6 +106,26 @@ private fun HelpHome(onOpen: (HelpPage) -> Unit, modifier: Modifier = Modifier) 
             subtitle = "版本、运行环境、开源协议与免责声明",
             onClick = { onOpen(HelpPage.ABOUT) }
         )
+
+        SectionCard("配置备份") {
+            HelpParagraph(
+                "把全部计划与全局设置导出成一个 JSON 文件（文件名带时间戳），换机或重装系统后导入即可恢复。\n" +
+                    "导入是覆盖式的：选完文件会先弹确认框，确认后当前全部计划与全局设置（含锁屏密码）都会被替换。"
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onExportConfig, modifier = Modifier.weight(1f)) {
+                    Text("导出配置")
+                }
+                OutlinedButton(onClick = onImportConfig, modifier = Modifier.weight(1f)) {
+                    Text("导入配置")
+                }
+            }
+            Text(
+                "注意：文件里含明文锁屏密码，不要随手发给别人。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         SectionCard("常见问题") {
             HelpParagraph(
@@ -175,7 +210,7 @@ private fun ConfigDocPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
             )
         }
 
-        SectionCard("配置备份") {
+        SectionCard("配置备份（在「帮助」页）") {
             HelpParagraph(
                 "导出会把全部计划与全局设置写成一个带时间戳的 JSON 文件，换机或重装系统后导入即可恢复。\n" +
                     "导入是覆盖式的：会先弹确认框，确认后当前全部计划与全局设置（含锁屏密码）都会被替换。\n" +

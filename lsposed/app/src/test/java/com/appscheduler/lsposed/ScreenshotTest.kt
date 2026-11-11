@@ -95,6 +95,14 @@ class ScreenshotTest {
             extra = "已验证 uid=0(root) gid=0(root)"
         ),
         PermRow(
+            key = "packages",
+            title = "读取应用列表",
+            detail = "还没读过应用列表。点「现在检查」读一次；部分系统（HyperOS、MIUI）这时会弹一次「取得已安装的应用程式资讯」，允许后「选择应用」才能看到全部应用。",
+            status = PermStatus.UNKNOWN,
+            actionLabel = "现在检查",
+            action = PermAction.PACKAGE_CHECK
+        ),
+        PermRow(
             key = "lsposed",
             title = "LSPosed 模块",
             detail = "本模块要在 LSPosed 里勾选并作用到「系统界面」，锁屏才能真正被收起。App 自身无法判断是否已生效。",
