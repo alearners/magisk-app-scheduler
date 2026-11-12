@@ -24,6 +24,8 @@ data class TaskItem(
     var onlyWifi: Boolean = false,
     var onlyScreenOff: Boolean = false,
     var enabled: Boolean = true,
+    /** 解锁后启动该计划里的应用时，是否先强制停止：true 冷启动，false 直接启动 / 切回已运行的进程 */
+    var forceColdStart: Boolean = true,
     var lastRunAt: Long = 0L,
     var lastResult: String = ""
 ) {
@@ -75,6 +77,7 @@ data class TaskItem(
         o.put("onlyWifi", onlyWifi)
         o.put("onlyScreenOff", onlyScreenOff)
         o.put("enabled", enabled)
+        o.put("forceColdStart", forceColdStart)
         o.put("lastRunAt", lastRunAt)
         o.put("lastResult", lastResult)
         return o
@@ -84,6 +87,9 @@ data class TaskItem(
         const val TYPE_TIMES = "TIMES"
         const val TYPE_WEEKLY = "WEEKLY"
         const val TYPE_INTERVAL = "INTERVAL"
+
+        /** 默认保持原有行为：先强制停止再启动，保证是冷启动 */
+        const val DEFAULT_FORCE_COLD_START = true
 
         fun weekdayName(day: Int): String = when (day) {
             1 -> "周一"
@@ -130,6 +136,8 @@ data class TaskItem(
             task.onlyWifi = o.optBoolean("onlyWifi", false)
             task.onlyScreenOff = o.optBoolean("onlyScreenOff", false)
             task.enabled = o.optBoolean("enabled", true)
+            // 旧配置没有这个字段：默认保持原有行为「先强制停止再启动」
+            task.forceColdStart = o.optBoolean("forceColdStart", DEFAULT_FORCE_COLD_START)
             task.lastRunAt = o.optLong("lastRunAt", 0L)
             task.lastResult = o.optString("lastResult", "")
             return task

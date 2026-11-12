@@ -54,7 +54,6 @@ object ConfigTransfer {
         global.put("autoLock", config.autoLock())
         global.put("autoLockDelay", config.autoLockDelay())
         global.put("timerMode", config.timerMode())
-        global.put("forceColdStart", config.forceColdStart())
         root.put("global", global)
 
         val tasks = JSONArray()
@@ -95,8 +94,7 @@ object ConfigTransfer {
                 g.optInt("manualWait", Config.DEFAULT_MANUAL_WAIT),
                 g.optBoolean("autoLock", false),
                 g.optInt("autoLockDelay", Config.DEFAULT_AUTO_LOCK_DELAY),
-                g.optString("timerMode", Config.TIMER_ALARM),
-                g.optBoolean("forceColdStart", Config.DEFAULT_FORCE_COLD_START)
+                g.optString("timerMode", Config.TIMER_ALARM)
             )
         }
 

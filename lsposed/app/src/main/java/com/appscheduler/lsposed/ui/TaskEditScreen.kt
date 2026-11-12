@@ -274,6 +274,20 @@ fun TaskEditScreen(
             )
         }
 
+        // ---- 启动方式：每个计划自己决定 ----
+        SectionCard("启动方式") {
+            SwitchRow(
+                title = "启动前强制停止目标应用",
+                description = if (task.forceColdStart) {
+                    "先结束该应用再启动，保证是全新进程、从头进入"
+                } else {
+                    "直接启动，已在后台的进程会被切回前台，界面留在原处"
+                },
+                checked = task.forceColdStart,
+                onCheckedChange = { onChange(task.copy(forceColdStart = it)) }
+            )
+        }
+
         Button(onClick = onSave, modifier = Modifier.fillMaxWidth()) {
             Text("保存计划")
         }

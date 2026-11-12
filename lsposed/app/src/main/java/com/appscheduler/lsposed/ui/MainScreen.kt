@@ -74,7 +74,6 @@ fun MainScreen() {
     var autoLock by remember { mutableStateOf(prefs.autoLock()) }
     var autoLockDelay by remember { mutableStateOf(prefs.autoLockDelay().toString()) }
     var timerMode by remember { mutableStateOf(prefs.timerMode()) }
-    var forceColdStart by remember { mutableStateOf(prefs.forceColdStart()) }
 
     var logTab by remember { mutableStateOf(LogTab.CURRENT) }
     var logCurrent by remember { mutableStateOf(LogStore.readCurrent(context)) }
@@ -117,7 +116,6 @@ fun MainScreen() {
         autoLock = prefs.autoLock()
         autoLockDelay = prefs.autoLockDelay().toString()
         timerMode = prefs.timerMode()
-        forceColdStart = prefs.forceColdStart()
     }
 
     // 进页面、切到日志/权限 tab 时刷新对应的实时内容
@@ -291,8 +289,7 @@ fun MainScreen() {
             manualWait.toIntOrNull() ?: Config.DEFAULT_MANUAL_WAIT,
             autoLock,
             autoLockDelay.toIntOrNull() ?: Config.DEFAULT_AUTO_LOCK_DELAY,
-            timerMode,
-            forceColdStart
+            timerMode
         )
         // 计时方式可能变了：切内部计时器要拉起常驻服务，切回闹钟要重排闹钟
         Scheduler.applyMode(context)
@@ -336,7 +333,9 @@ fun MainScreen() {
         if (runningId != null) return
         runningId = task.id
         scope.launch {
-            withContext(Dispatchers.IO) { RunCoordinator.runNow(context, task.packages) }
+            withContext(Dispatchers.IO) {
+                RunCoordinator.runNow(context, task.packages, task.forceColdStart)
+            }
             runningId = null
             reloadTasks()
             reloadLog()
@@ -461,8 +460,6 @@ fun MainScreen() {
                             onAutoLockDelayChange = { autoLockDelay = it },
                             timerMode = timerMode,
                             onTimerModeChange = { timerMode = it },
-                            forceColdStart = forceColdStart,
-                            onForceColdStartChange = { forceColdStart = it },
                             onSaveSettings = { saveSettings() },
                             onOpenLog = { tab = MainTab.LOG },
                             onOpenHelp = { tab = MainTab.HELP },

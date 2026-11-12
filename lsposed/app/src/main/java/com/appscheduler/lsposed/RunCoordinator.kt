@@ -114,7 +114,7 @@ object RunCoordinator {
             log.append("锁屏状态: false，直接启动\n")
         }
 
-        val ok = TaskRunner.launch(runnable, config.forceColdStart(), log)
+        val ok = TaskRunner.launch(runnable, task.forceColdStart, log)
         LogStore.append(context, log.toString())
         if (!ok) {
             TaskRunner.notifyFailure(context, log.toString())
@@ -168,7 +168,7 @@ object RunCoordinator {
                 applyResult(context, task, false)
                 continue
             }
-            val ok = TaskRunner.launch(runnable, Config.get(context).forceColdStart(), log)
+            val ok = TaskRunner.launch(runnable, task.forceColdStart, log)
             LogStore.append(context, log.toString())
             if (!ok) {
                 TaskRunner.notifyFailure(context, log.toString())
@@ -216,7 +216,7 @@ object RunCoordinator {
     }
 
     /** 界面上的「立即执行」：同步跑完并把结果写日志 */
-    fun runNow(context: Context, packages: List<String>): Boolean {
+    fun runNow(context: Context, packages: List<String>, forceColdStart: Boolean): Boolean {
         val log = StringBuilder()
         log.append("=== 手动执行 ${TaskRunner.stamp()} ===\n")
         if (!TaskRunner.suAvailable()) {
@@ -239,7 +239,7 @@ object RunCoordinator {
             TaskRunner.notifyFailure(context, log.toString())
             return false
         }
-        val ok = TaskRunner.launch(runnable, config.forceColdStart(), log)
+        val ok = TaskRunner.launch(runnable, forceColdStart, log)
         LogStore.append(context, log.toString())
         if (!ok) {
             TaskRunner.notifyFailure(context, log.toString())

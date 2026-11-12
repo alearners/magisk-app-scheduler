@@ -35,8 +35,8 @@ enum class HelpPage(val title: String) {
 /** 关于页要展示的软件信息，由调用方填，方便截图测试注入固定值 */
 data class AboutInfo(
     val appName: String = "AppTimer",
-    val versionName: String = "2.3.0",
-    val versionCode: Long = 25,
+    val versionName: String = "2.3.1",
+    val versionCode: Long = 26,
     val packageName: String = "com.appscheduler.lsposed",
     val minSdk: Int = 26,
     val repoUrl: String = "https://github.com/alearners/magisk-app-scheduler",
@@ -197,14 +197,19 @@ private fun ConfigDocPage(onBack: () -> Unit, modifier: Modifier = Modifier) {
             )
         }
 
+        SectionCard("计划：启动方式") {
+            HelpParagraph(
+                "这个开关在「新建 / 编辑计划」里，每个计划单独决定，互不影响。\n" +
+                    "· 打开（启动前强制停止）：先结束该应用再启动，保证是全新进程、从头进入。\n" +
+                    "· 关闭：直接启动，已在后台的进程会被切回前台，界面留在原处，启动更快。"
+            )
+        }
+
         SectionCard("全局设置") {
             HelpParagraph(
                 "锁屏密码：设备的数字锁屏密码，用于自动解锁时注入。只支持纯数字；字母和符号在 input 注入里容易被转义。\n\n" +
                     "等用户手动解锁后再启动：自动解锁失败时不放弃，改为等你解锁后立刻启动应用（需通知权限才能提醒你）。\n\n" +
                     "最长等待秒数（10–1800）：等待手动解锁的上限，超时就放弃本次任务并写日志 / 发通知。填太小（比如 10 秒）容易还没看到提醒就超时。\n\n" +
-                    "启动前强制停止目标应用：\n" +
-                    "  · 打开：启动前先结束该应用，保证是全新进程、从头进入。\n" +
-                    "  · 关闭：直接启动，已在后台的进程会被切回前台，界面留在原处，启动更快。\n\n" +
                     "启动后无操作自动锁屏：应用起来后若你一直没碰屏幕，过一段时间自动熄屏上锁。到点时前台已经不是目标应用（说明你切走了）会自动跳过，不会误锁。\n\n" +
                     "无操作多少秒后锁屏（2–600）：上面的延时。太短来不及看清界面，建议 5–30 秒。\n\n" +
                     "用应用内部计时器计时：\n" +
@@ -263,8 +268,8 @@ private fun AboutPage(about: AboutInfo, onBack: () -> Unit, modifier: Modifier =
             HelpParagraph(
                 "按你设定的计划，在指定时间自动把设备唤到可用状态，然后启动指定的应用：\n" +
                     "· 唤醒屏幕、上滑、注入锁屏密码；密码方式失败时，可收起锁屏或等你手动解锁。\n" +
-                    "· 按你的设置启动：先强制停止再启动（冷启动，全新进程），或直接启动（切回已在后台的进程）。\n" +
-                    "· 支持多应用、多计划并发，每个计划可单独设置触发方式与条件。\n" +
+                    "· 每个计划自己决定启动方式：先强制停止再启动（冷启动，全新进程），或直接启动（切回已在后台的进程）。\n" +
+                    "· 支持多应用、多计划并发，每个计划可单独设置触发方式、条件与启动方式。\n" +
                     "· 可选：启动完成后若一直无操作，自动熄屏上锁，回到你原本的锁屏状态。\n\n" +
                     "收起锁屏由 LSPosed 钩子在 SystemUI 内完成，其余动作通过 root 执行。"
             )
