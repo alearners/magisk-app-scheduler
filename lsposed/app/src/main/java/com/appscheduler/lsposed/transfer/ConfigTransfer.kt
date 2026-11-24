@@ -7,6 +7,10 @@ import com.appscheduler.lsposed.LogStore
 import com.appscheduler.lsposed.model.TaskItem
 import com.appscheduler.lsposed.schedule.Scheduler
 import com.appscheduler.lsposed.store.TaskStore
+import com.appscheduler.lsposed.ui.BackgroundStyle
+import com.appscheduler.lsposed.ui.ThemeMath
+import com.appscheduler.lsposed.ui.ThemeMode
+import com.appscheduler.lsposed.ui.ThemeSettings
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -56,6 +60,22 @@ object ConfigTransfer {
         global.put("timerMode", config.timerMode())
         root.put("global", global)
 
+        // 主题随配置迁移；自选图片 URI 换机后无效，因此只写参数，不写图片地址
+        val theme = ThemeSettings.load(context).forTransfer()
+        root.put("theme", JSONObject().apply {
+            put("mode", theme.mode.storage)
+            put("accentColor", theme.accentColor)
+            put("backgroundStyle", theme.backgroundStyle.storage)
+            put("backgroundAlpha", theme.backgroundAlpha.toDouble())
+            put("backgroundScrim", theme.backgroundScrim.toDouble())
+            put("buttonAlpha", theme.buttonAlpha.toDouble())
+            put("timeAccentEnabled", theme.timeAccentEnabled)
+            put("dayAccent", theme.dayAccent)
+            put("nightAccent", theme.nightAccent)
+            put("dayStart", theme.dayStart)
+            put("nightStart", theme.nightStart)
+        })
+
         val tasks = JSONArray()
         TaskStore.all(context).forEach { tasks.put(it.toJson()) }
         root.put("tasks", tasks)
@@ -98,6 +118,36 @@ object ConfigTransfer {
             )
         }
 
+        // 2.1) 主题：旧备份没有该对象时保持本机现有主题；图片一律退回无背景
+        payload.theme?.let { t ->
+            val base = ThemeSettings.load(context)
+            val style = BackgroundStyle.from(
+                t.optString("backgroundStyle", base.backgroundStyle.storage)
+            )
+            val safeStyle = if (style == BackgroundStyle.IMAGE) BackgroundStyle.NONE else style
+            val dayStart = t.optString("dayStart", base.dayStart)
+                .takeIf { ThemeMath.parseTimeToMinutes(it) != null } ?: base.dayStart
+            val nightStart = t.optString("nightStart", base.nightStart)
+                .takeIf { ThemeMath.parseTimeToMinutes(it) != null } ?: base.nightStart
+            ThemeSettings.save(
+                context,
+                base.copy(
+                    mode = ThemeMode.from(t.optString("mode", base.mode.storage)),
+                    accentColor = ThemeMath.opaque(t.optInt("accentColor", base.accentColor)),
+                    backgroundStyle = safeStyle,
+                    backgroundImageUri = null,
+                    backgroundAlpha = t.optDouble("backgroundAlpha", base.backgroundAlpha.toDouble()).toFloat(),
+                    backgroundScrim = t.optDouble("backgroundScrim", base.backgroundScrim.toDouble()).toFloat(),
+                    buttonAlpha = t.optDouble("buttonAlpha", base.buttonAlpha.toDouble()).toFloat(),
+                    timeAccentEnabled = t.optBoolean("timeAccentEnabled", base.timeAccentEnabled),
+                    dayAccent = ThemeMath.opaque(t.optInt("dayAccent", base.dayAccent)),
+                    nightAccent = ThemeMath.opaque(t.optInt("nightAccent", base.nightAccent)),
+                    dayStart = dayStart,
+                    nightStart = nightStart
+                )
+            )
+        }
+
         // 3) 计划重新编号后整体覆盖，再逐个排下一次
         var nextId = 1L
         tasks.forEach { task ->
@@ -124,6 +174,7 @@ object ConfigTransfer {
 
     private data class Payload(
         val global: JSONObject?,
+        val theme: JSONObject?,
         val tasks: List<TaskItem>,
         val hasTasksArray: Boolean
     )
@@ -155,17 +206,18 @@ object ConfigTransfer {
         }
         val version = root.optString("versionName", "").ifBlank { "未知版本" }
         val global = root.optJSONObject("global")
+        val theme = root.optJSONObject("theme")
         return Parsed(
             ok = true,
             message = "AppTimer $version",
             taskCount = tasks.size,
-            payload = Payload(global, tasks, arr != null)
+            payload = Payload(global, theme, tasks, arr != null)
         )
     }
 
     private fun versionName(context: Context): String = try {
-        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0.0.001"
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0.0.002"
     } catch (t: PackageManager.NameNotFoundException) {
-        "0.0.001"
+        "0.0.002"
     }
 }

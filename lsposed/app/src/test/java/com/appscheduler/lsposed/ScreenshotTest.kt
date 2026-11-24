@@ -22,6 +22,9 @@ import com.appscheduler.lsposed.ui.AppSchedulerTheme
 import com.appscheduler.lsposed.ui.BottomTabBar
 import com.appscheduler.lsposed.ui.HelpPage
 import com.appscheduler.lsposed.ui.HelpScreen
+import com.appscheduler.lsposed.ui.BackgroundStyle
+import com.appscheduler.lsposed.ui.ThemeSettings
+import com.appscheduler.lsposed.ui.ThemeSettingsScreen
 import com.appscheduler.lsposed.ui.LaunchModeSection
 import com.appscheduler.lsposed.ui.LogScreen
 import com.appscheduler.lsposed.ui.MainTab
@@ -378,6 +381,63 @@ class ScreenshotTest {
                 about = AboutInfo(),
                 onOpen = {},
                 onBack = {}
+            )
+        }
+    }
+
+    @Test
+    fun themeSettings() = paparazzi.snapshot(name = "13-theme") {
+        Scene {
+            ThemeSettingsScreen(
+                settings = ThemeSettings(
+                    backgroundStyle = BackgroundStyle.MIST,
+                    timeAccentEnabled = true,
+                    dayAccent = 0xFF1FA0CC.toInt(),
+                    nightAccent = 0xFF5C7CFA.toInt(),
+                    buttonAlpha = 0.9f
+                ),
+                onSave = {},
+                onBack = {},
+                nowMinutes = 8 * 60,
+                imagePickerEnabled = false
+            )
+        }
+    }
+
+    @Test
+    fun themeSettingsLower() = paparazzi.snapshot(name = "16-theme-lower") {
+        Scene {
+            ThemeSettingsScreen(
+                settings = ThemeSettings(
+                    backgroundStyle = BackgroundStyle.AURORA,
+                    timeAccentEnabled = false,
+                    buttonAlpha = 0.6f,
+                    backgroundAlpha = 0.7f
+                ),
+                onSave = {},
+                onBack = {},
+                nowMinutes = 8 * 60,
+                imagePickerEnabled = false,
+                initialScroll = 1600
+            )
+        }
+    }
+
+    @Test
+    fun themeSettingsDark() = paparazzi.snapshot(name = "17-theme-dark") {
+        Scene {
+            ThemeSettingsScreen(
+                settings = ThemeSettings(
+                    mode = com.appscheduler.lsposed.ui.ThemeMode.DARK,
+                    backgroundStyle = BackgroundStyle.DUSK,
+                    timeAccentEnabled = true,
+                    nightAccent = 0xFF5C7CFA.toInt(),
+                    buttonAlpha = 0.85f
+                ),
+                onSave = {},
+                onBack = {},
+                nowMinutes = 20 * 60,
+                imagePickerEnabled = false
             )
         }
     }

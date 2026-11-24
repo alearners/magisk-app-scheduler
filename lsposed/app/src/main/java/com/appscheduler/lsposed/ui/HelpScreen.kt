@@ -31,14 +31,15 @@ enum class HelpPage(val title: String) {
     TERMS("使用说明"),
     LAUNCH_DOC("启动方式"),
     CONFIG_DOC("配置说明"),
+    THEME("主题设置"),
     ABOUT("关于本软件")
 }
 
 /** 关于页要展示的软件信息，由调用方填，方便截图测试注入固定值 */
 data class AboutInfo(
     val appName: String = "AppTimer",
-    val versionName: String = "0.0.001",
-    val versionCode: Long = 1,
+    val versionName: String = "0.0.002",
+    val versionCode: Long = 2,
     val packageName: String = "com.appscheduler.lsposed",
     val minSdk: Int = 26,
     val lsposedVersion: String = "未检测到",
@@ -54,6 +55,8 @@ fun HelpScreen(
     onBack: () -> Unit,
     onExportConfig: () -> Unit = {},
     onImportConfig: () -> Unit = {},
+    themeSettings: ThemeSettings = ThemeSettings(),
+    onSaveTheme: (ThemeSettings) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     when (page) {
@@ -67,6 +70,11 @@ fun HelpScreen(
         HelpPage.CONFIG_DOC -> ConfigDocPage(onBack = onBack, modifier = modifier)
         HelpPage.TERMS -> TermsPage(onBack = onBack, modifier = modifier)
         HelpPage.LAUNCH_DOC -> LaunchDocPage(onBack = onBack, modifier = modifier)
+        HelpPage.THEME -> ThemeSettingsScreen(
+            settings = themeSettings,
+            onSave = onSaveTheme,
+            onBack = onBack
+        )
         HelpPage.ABOUT -> AboutPage(about = about, onBack = onBack, modifier = modifier)
     }
 }
@@ -89,7 +97,7 @@ private fun HelpHome(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        ScreenHeader("更多", "功能介绍、启动方式说明、配置项释义与开源信息")
+        ScreenHeader("更多", "功能介绍、主题设置、启动方式说明、配置项释义与开源信息")
 
         SectionCard("上手四步") {
             HelpParagraph(
@@ -116,6 +124,12 @@ private fun HelpHome(
             title = "配置说明",
             subtitle = "各配置项的作用与建议填法",
             onClick = { onOpen(HelpPage.CONFIG_DOC) }
+        )
+
+        HelpEntry(
+            title = "主题设置",
+            subtitle = "按钮配色、背景图片、透明度与按时段自动切换",
+            onClick = { onOpen(HelpPage.THEME) }
         )
 
         HelpEntry(

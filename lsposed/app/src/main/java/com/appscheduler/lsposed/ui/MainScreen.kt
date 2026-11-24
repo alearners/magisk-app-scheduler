@@ -10,6 +10,7 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.appscheduler.lsposed.Config
 import com.appscheduler.lsposed.LogStore
@@ -42,6 +44,7 @@ import com.appscheduler.lsposed.schedule.Scheduler
 import com.appscheduler.lsposed.store.TaskStore
 import com.appscheduler.lsposed.transfer.ConfigTransfer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -77,6 +80,8 @@ fun MainScreen() {
     var autoLock by remember { mutableStateOf(prefs.autoLock()) }
     var autoLockDelay by remember { mutableStateOf(prefs.autoLockDelay().toString()) }
     var timerMode by remember { mutableStateOf(prefs.timerMode()) }
+    var themeSettings by remember { mutableStateOf(ThemeSettings.load(context)) }
+    var nowMinute by remember { mutableStateOf(currentMinuteOfDay()) }
 
     var logDate by remember { mutableStateOf(LogStore.today()) }
     var logLevel by remember { mutableStateOf<LogStore.Level?>(null) }
@@ -180,6 +185,7 @@ fun MainScreen() {
         autoLockDelay = prefs.autoLockDelay().toString()
         timerMode = prefs.timerMode()
         logLimitKb = prefs.logLimitKb()
+        themeSettings = ThemeSettings.load(context)
     }
 
     // 进页面、切到日志/概览 tab 时刷新对应的实时内容
@@ -188,6 +194,14 @@ fun MainScreen() {
             MainTab.LOG -> reloadLog()
             MainTab.OVERVIEW -> recheckPermissions()
             else -> Unit
+        }
+    }
+
+    // 按时间切换按钮配色时，即使跨过日间 / 夜间分界，也无需重启应用
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000L)
+            nowMinute = currentMinuteOfDay()
         }
     }
 
@@ -432,6 +446,13 @@ fun MainScreen() {
         }
     }
 
+    fun saveTheme(next: ThemeSettings) {
+        themeSettings = next
+        ThemeSettings.save(context, next)
+        nowMinute = currentMinuteOfDay()
+        toast("主题设置已保存，全部页面将按新设置呈现。")
+    }
+
     val nextRunText = remember(tasks, masterEnabled) {
         describeSoonest(context, tasks, masterEnabled)
     }
@@ -459,7 +480,20 @@ fun MainScreen() {
         about = withContext(Dispatchers.IO) { loadAboutInfo(context) }
     }
 
-    Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { innerPadding ->
+    val systemDark = isSystemInDarkTheme()
+    AppSchedulerTheme(
+        settings = themeSettings,
+        nowMinutes = nowMinute,
+        darkTheme = systemDark
+    ) {
+        AppThemeBackground(
+            settings = themeSettings,
+            darkTheme = themeSettings.darkTheme(systemDark)
+        ) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbar) },
+            containerColor = Color.Transparent
+        ) { innerPadding ->
         pendingImport?.let { text ->
             AlertDialog(
                 onDismissRequest = { pendingImport = null },
@@ -467,7 +501,7 @@ fun MainScreen() {
                 text = {
                     Text(
                         "文件中包含：$pendingImportInfo。\n" +
-                            "当前共有 ${tasks.size} 份计划，导入后将被整体替换；全局设置（含锁屏密码）亦将一并替换。"
+                            "当前共有 ${tasks.size} 份计划，导入后将被整体替换；全局设置（含锁屏密码）亦将一并替换；若文件含主题设置，主题亦随之替换。"
                     )
                 },
                 confirmButton = {
@@ -632,7 +666,9 @@ fun MainScreen() {
                             onOpen = { helpPage = it },
                             onBack = { helpPage = HelpPage.HOME },
                             onExportConfig = { exportLauncher.launch(ConfigTransfer.defaultFileName()) },
-                            onImportConfig = { importLauncher.launch(arrayOf("*/*")) }
+                            onImportConfig = { importLauncher.launch(arrayOf("*/*")) },
+                            themeSettings = themeSettings,
+                            onSaveTheme = { saveTheme(it) }
                         )
                     }
                 }
@@ -642,6 +678,8 @@ fun MainScreen() {
             if (subScreen == null) {
                 BottomTabBar(selected = tab, onSelect = { selectTab(it) })
             }
+        }
+        }
         }
     }
 }
