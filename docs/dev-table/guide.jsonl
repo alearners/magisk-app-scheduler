@@ -1,0 +1,9 @@
+{"item": "这张表是什么", "content": "把现在这个 AppTimer（LSPosed 版，0.0.001 / versionCode 1）是怎么做出来的，拆成 21 段可以单独粘贴的提示词。换一个新账号、手里没有任何上下文，也能照着顺序 00 → 20 一段一段贴过去；每一轮验收过了再走下一条，最后得到的效果和本机这份一样。"}
+{"item": "怎么用", "content": "1) 先翻「环境与命令」那一页，把工具链、手机、仓库都核对一遍；\n2) 从 00 开始，一次只贴一段，别把好几段揉在一起；\n3) 每段先看「验收标准」，没过就让 AI 改到过，再往下；\n4) 凡是要动版本的那些段（07、14、15、18），四处一起改：build.gradle、HelpScreen 的 AboutInfo、README、Paparazzi 快照；\n5) 全部走完，按 19 收尾。"}
+{"item": "从哪开始，到哪算完", "content": "起点：一个空仓库，或者只有一个 Magisk 版。终点：`lsposed` 分支上有一份能编译、能交给 CI 出包、能装进真机、界面和功能跟这台机器一样的 0.0.001。要做的事包括：多个应用多份计划的定时打开、按条件决定做不做（充电 / WiFi / 屏幕黑着）、自动解锁（LSPosed 钩住系统界面收锁屏，密码只作兜底）、四种打开方式、权限体检、三级日志、同意之后才干活、配置导出导入。"}
+{"item": "动手前得有什么", "content": "一台 Windows 电脑；JDK 17；Gradle 8.7；Android SDK（platform 34 / build-tools 34.0.0 / platform-tools）；一台已经 root（Magisk 或 KernelSU）、装了 LSPosed、开了 USB 调试的手机；Git 和 GitHub CLI 都登录好了；仓库里已经有 lsposed 这个变体（真从零开始的话，先把 lsposed/app 模块、Compose、Xposed API 依赖搭出来）。"}
+{"item": "不能动的东西（先看这条）", "content": "applicationId 和包名一直是 com.appscheduler.lsposed；SharedPreferences 一直是 app_scheduler；广播前缀 com.appscheduler.action.；签名权限 com.appscheduler.permission.DISMISS_KEYGUARD；许可证 GPL-3.0；应用不碰屏幕方向、不改系统的自动旋转；monkey 必须留作可选打开方式之一；文案统一说「App / 应用」，别堆技术括号；只在自有设备上测。"}
+{"item": "版本基线", "content": "现在是 versionName 0.0.001 / versionCode 1；钩子常量 HOOK_VERSION_CODE=1（只有改过 XposedEntry 才往上加）；日志一天最多 512 KB，只留 30 天；默认用系统闹钟计时；默认不自动锁屏。"}
+{"item": "表里默认你已经有这些文件", "content": "每段提示词都当仓库里已经有对应的文件（路径写在「涉及文件」那一列）。要是完全空白的新仓库，先按 03→05 把数据层、定时、执行链搭起来，再按 08→12 做界面。文件名可以按你自己的分层改，但每个类该干什么、验收时该看到什么，不能变。"}
+{"item": "许可证与责任", "content": "GPL-3.0。发布说明要自己写，不能机器生成，而且要写明：锁屏密码是明文放在手机里的，导出的备份同样带明文；只在自有设备上真机验过（Xiaomi 15 / 澎湃 / Android 15 / LSPosed 2.1.0）；用它出的任何事都由使用者自己承担全部责任，作者不给任何担保。"}
+{"item": "出问题按这个顺序查", "content": "先翻「日志」页的「错误」这一档 → 再看 `su -c \"tail -n 30 /data/data/com.appscheduler.lsposed/files/apptimer-<今天>.log\"` → 再看 `logcat -d -s AppTimer:I | tail -n 20` → 最后才去怀疑权限（通知 / 准时唤醒 / 省电白名单 / 自启动 / 后台弹出界面 / LSPosed 作用域）。"}

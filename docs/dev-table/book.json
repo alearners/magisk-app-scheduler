@@ -1,0 +1,156 @@
+{
+  "sheets": [
+    {
+      "name": "使用说明",
+      "columns": [
+        {
+          "key": "item",
+          "type": "text",
+          "title": "项目",
+          "width": 22
+        },
+        {
+          "key": "content",
+          "type": "text",
+          "title": "内容",
+          "width": 118
+        }
+      ],
+      "data_files": [
+        "guide.jsonl"
+      ],
+      "expected_rows": 9,
+      "row_height": 92,
+      "freeze_header": true
+    },
+    {
+      "name": "开发表",
+      "columns": [
+        {
+          "key": "id",
+          "type": "text",
+          "title": "序号",
+          "width": 6,
+          "align": "center"
+        },
+        {
+          "key": "stage",
+          "type": "text",
+          "title": "阶段",
+          "width": 14
+        },
+        {
+          "key": "goal",
+          "type": "text",
+          "title": "这一轮要做什么",
+          "width": 26
+        },
+        {
+          "key": "prompt",
+          "type": "text",
+          "title": "直接粘贴的提示词（整格复制给新会话）",
+          "width": 112
+        },
+        {
+          "key": "accept",
+          "type": "text",
+          "title": "验收标准",
+          "width": 42
+        },
+        {
+          "key": "files",
+          "type": "text",
+          "title": "涉及文件 / 入口",
+          "width": 30
+        },
+        {
+          "key": "pitfall",
+          "type": "text",
+          "title": "坑与约定",
+          "width": 34
+        }
+      ],
+      "data_files": [
+        "part-1.jsonl",
+        "part-2.jsonl",
+        "part-3.jsonl",
+        "part-4.jsonl"
+      ],
+      "expected_rows": 21,
+      "row_height": 215,
+      "freeze_header": true
+    },
+    {
+      "name": "环境与命令",
+      "columns": [
+        {
+          "key": "item",
+          "type": "text",
+          "title": "项目",
+          "width": 20
+        },
+        {
+          "key": "value",
+          "type": "text",
+          "title": "值 / 命令",
+          "width": 62
+        },
+        {
+          "key": "note",
+          "type": "text",
+          "title": "说明",
+          "width": 52
+        }
+      ],
+      "data_files": [
+        "env.jsonl"
+      ],
+      "expected_rows": 20,
+      "row_height": 48,
+      "freeze_header": true
+    },
+    {
+      "name": "版本流水",
+      "columns": [
+        {
+          "key": "version",
+          "type": "text",
+          "title": "版本",
+          "width": 10,
+          "align": "center"
+        },
+        {
+          "key": "commit",
+          "type": "text",
+          "title": "提交",
+          "width": 10
+        },
+        {
+          "key": "date",
+          "type": "text",
+          "title": "日期",
+          "width": 12,
+          "align": "center"
+        },
+        {
+          "key": "change",
+          "type": "text",
+          "title": "主要变化",
+          "width": 78
+        },
+        {
+          "key": "note",
+          "type": "text",
+          "title": "备注",
+          "width": 48
+        }
+      ],
+      "data_files": [
+        "versions.jsonl"
+      ],
+      "expected_rows": 2,
+      "row_height": 70,
+      "freeze_header": true
+    }
+  ]
+}

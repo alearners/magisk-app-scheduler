@@ -1,0 +1,189 @@
+package com.appscheduler.lsposed;
+
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.Build;
+
+import java.lang.reflect.Method;
+
+import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XposedBridge;
+import de.robv.android.xposed.XposedHelpers;
+import de.robv.android.xposed.callbacks.XC_LoadPackage;
+
+/**
+ * LSPosed 入口：只在 SystemUI 进程内工作。
+ * <p>
+ * 1) 在 Application.onCreate 之后注册一个动态广播接收器；
+ * 2) 捕获 KeyguardViewMediator 实例；
+ * 3) 收到收起锁屏广播时，按候选方法列表反射调用，把 Keyguard 收起。
+ */
+public class XposedEntry implements IXposedHookLoadPackage {
+
+    private static final String TAG = "[AppTimer] ";
+    private static final String KEYGUARD_MEDIATOR =
+            "com.android.systemui.keyguard.KeyguardViewMediator";
+
+    private static volatile Object sMediator;
+
+    @Override
+    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
+        if (!TaskRunner.SYSTEMUI_PKG.equals(lpparam.packageName)) {
+            return;
+        }
+        log("模块已注入 " + lpparam.packageName);
+
+        hookApplication(lpparam);
+        hookMediator(lpparam);
+    }
+
+    private void hookApplication(XC_LoadPackage.LoadPackageParam lpparam) {
+        try {
+            XposedHelpers.findAndHookMethod("android.app.Application", lpparam.classLoader, "onCreate",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            try {
+                                Context context = (Context) param.thisObject;
+                                registerReceiver(context);
+                            } catch (Throwable t) {
+                                log("注册广播失败: " + t);
+                            }
+                        }
+                    });
+            log("已挂钩 Application.onCreate");
+        } catch (Throwable t) {
+            log("挂钩 Application.onCreate 失败: " + t);
+        }
+    }
+
+    private void hookMediator(XC_LoadPackage.LoadPackageParam lpparam) {
+        try {
+            final Class<?> cls = XposedHelpers.findClass(KEYGUARD_MEDIATOR, lpparam.classLoader);
+
+            XposedBridge.hookAllConstructors(cls, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    sMediator = param.thisObject;
+                    log("已捕获 KeyguardViewMediator 实例");
+                }
+            });
+
+            // 兜底：构造挂钩失效时，从任意一次 handleHideKeyguard 调用中捕获实例
+            XposedBridge.hookAllMethods(cls, "handleHideKeyguard", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (sMediator == null) {
+                        sMediator = param.thisObject;
+                        log("已从 handleHideKeyguard 捕获实例");
+                    }
+                }
+            });
+
+            log("已挂钩 " + KEYGUARD_MEDIATOR);
+        } catch (Throwable t) {
+            log("挂钩 KeyguardViewMediator 失败: " + t);
+        }
+    }
+
+    private void registerReceiver(Context context) {
+        BroadcastReceiver receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context ctx, Intent intent) {
+                if (TaskRunner.ACTION_PING.equals(intent.getAction())) {
+                    // 只回一句日志：App 用 root 读 logcat 看到它，就说明模块真的活在这个进程里
+                    ping(intent.getStringExtra(TaskRunner.EXTRA_TOKEN));
+                    return;
+                }
+                log("收到收起锁屏广播");
+                dismissKeyguard();
+            }
+        };
+
+        IntentFilter filter = new IntentFilter(TaskRunner.ACTION_DISMISS);
+        filter.addAction(TaskRunner.ACTION_PING);
+        // 要求发送方持有同签名权限，避免任意 App 广播即可解锁屏幕
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, TaskRunner.DISMISS_PERMISSION, null,
+                    Context.RECEIVER_EXPORTED);
+        } else {
+            context.registerReceiver(receiver, filter, TaskRunner.DISMISS_PERMISSION, null);
+        }
+        log("广播接收器已注册: " + context.getPackageName());
+    }
+
+    /** 握手：把 pid、中介器状态、本次随机串与模块版本写进 logcat，供 App 侧判定作用域是否真的生效 */
+    private void ping(String token) {
+        try {
+            android.util.Log.i("AppTimer",
+                    "pong pid=" + android.os.Process.myPid()
+                            + " mediator=" + (sMediator != null ? "ready" : "waiting")
+                            + " vc=" + TaskRunner.HOOK_VERSION_CODE
+                            + " token=" + (token == null ? "" : token));
+        } catch (Throwable t) {
+            log("回握手失败: " + t);
+        }
+        log("收到握手广播，已回 pong");
+    }
+
+    private void dismissKeyguard() {
+        Object mediator = sMediator;
+        if (mediator == null) {
+            log("KeyguardViewMediator 尚未捕获，无法收起锁屏");
+            return;
+        }
+        if (tryCall(mediator, "dismissKeyguard", null, null)) {
+            return;
+        }
+        if (tryCall(mediator, "handleHideKeyguard", new Class<?>[]{boolean.class},
+                new Object[]{Boolean.TRUE})) {
+            return;
+        }
+        if (tryCall(mediator, "handleHideKeyguard", new Class<?>[]{boolean.class, boolean.class},
+                new Object[]{Boolean.TRUE, Boolean.TRUE})) {
+            return;
+        }
+        if (tryCall(mediator, "setShowingLocked", new Class<?>[]{boolean.class, boolean.class},
+                new Object[]{Boolean.FALSE, Boolean.TRUE})) {
+            return;
+        }
+        if (tryCall(mediator, "hideKeyguard", null, null)) {
+            return;
+        }
+        log("所有候选方法均不可用，需要按当前 ROM 的 KeyguardViewMediator 调整");
+    }
+
+    private boolean tryCall(Object target, String name, Class<?>[] types, Object[] args) {
+        try {
+            Method method;
+            try {
+                // 先找本类声明的方法，找不到再向上找继承来的（不同 ROM 里 KeyguardViewMediator 的继承结构不同）
+                method = types == null
+                        ? target.getClass().getDeclaredMethod(name)
+                        : target.getClass().getDeclaredMethod(name, types);
+            } catch (NoSuchMethodException ignored) {
+                method = types == null
+                        ? target.getClass().getMethod(name)
+                        : target.getClass().getMethod(name, types);
+            }
+            method.setAccessible(true);
+            method.invoke(target, args);
+            log("收起锁屏成功: " + name);
+            return true;
+        } catch (Throwable t) {
+            log("尝试 " + name + " 失败: " + t);
+            return false;
+        }
+    }
+
+    private static void log(String message) {
+        try {
+            XposedBridge.log(TAG + message);
+        } catch (Throwable ignored) {
+            // 日志失败不影响流程
+        }
+    }
+}

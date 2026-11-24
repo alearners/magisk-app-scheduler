@@ -1,0 +1,2 @@
+{"version": "0.0.001", "commit": "初始提交", "date": "2026-11-24", "change": "从零开始的第一个版本：全部说明与帮助按「像人说话」重写，版本号归零（versionCode 1、钩子常量 1），仓库历史与发布一并重置", "note": "唯一一次初始化提交；旧的 2.x 提交、tag 与 Release 已删除，不再保留"}
+{"version": "版本规则", "commit": "—", "date": "—", "change": "versionName 按功能往前走；versionCode 每次发版加 1；HOOK_VERSION_CODE 只在改 XposedEntry 时加 1", "note": "改版本要同时改 build.gradle、HelpScreen 的 AboutInfo、README 版本表、Paparazzi 快照"}
