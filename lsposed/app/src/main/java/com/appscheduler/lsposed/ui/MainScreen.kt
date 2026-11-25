@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -28,9 +29,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.appscheduler.lsposed.Config
 import com.appscheduler.lsposed.LogStore
 import com.appscheduler.lsposed.R
@@ -490,8 +493,8 @@ fun MainScreen() {
             settings = themeSettings,
             darkTheme = themeSettings.darkTheme(systemDark)
         ) {
+        Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            snackbarHost = { SnackbarHost(snackbar) },
             containerColor = Color.Transparent
         ) { innerPadding ->
         pendingImport?.let { text ->
@@ -679,6 +682,14 @@ fun MainScreen() {
                 BottomTabBar(selected = tab, onSelect = { selectTab(it) })
             }
         }
+        }
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        )
         }
         }
     }

@@ -3,11 +3,14 @@ package com.appscheduler.lsposed.ui
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +39,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private enum class ColorTarget { ACCENT, DAY, NIGHT }
@@ -54,6 +60,7 @@ private enum class ColorTarget { ACCENT, DAY, NIGHT }
  * 主题设置：主题模式、按钮色、按时段切换、背景与透明度、可读性提示。
  * 页面内先在草稿上预览，确认保存后才写入本机并作用于全局。
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ThemeSettingsScreen(
     settings: ThemeSettings,
@@ -66,6 +73,9 @@ fun ThemeSettingsScreen(
     val context = LocalContext.current
     val systemDark = isSystemInDarkTheme()
     val now = nowMinutes
+    val scrollState = rememberScrollState(initialScroll)
+    val scope = rememberCoroutineScope()
+    val timeFieldsBringIntoView = remember { BringIntoViewRequester() }
     var draft by remember(settings) { mutableStateOf(settings) }
     var attemptedSave by remember { mutableStateOf(false) }
     var colorTarget by remember { mutableStateOf<ColorTarget?>(null) }
@@ -103,7 +113,7 @@ fun ThemeSettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState(initialScroll))
+            .verticalScroll(scrollState)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -203,7 +213,9 @@ fun ThemeSettingsScreen(
                     )
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .bringIntoViewRequester(timeFieldsBringIntoView),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     OutlinedTextField(
@@ -357,6 +369,12 @@ fun ThemeSettingsScreen(
                 attemptedSave = true
                 if (!draft.timeAccentEnabled || (dayValid && nightValid)) {
                     onSave(draft)
+                } else {
+                    scope.launch {
+                        // 等错误提示完成布局后再滚动，确保提示行一并进入可视区
+                        withFrameNanos { }
+                        timeFieldsBringIntoView.bringIntoView()
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth()
