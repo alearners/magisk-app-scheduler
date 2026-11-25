@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.appscheduler.lsposed.Config
 
 /** 「更多」页的各个页面 */
 enum class HelpPage(val title: String) {
@@ -32,14 +33,15 @@ enum class HelpPage(val title: String) {
     LAUNCH_DOC("启动方式"),
     CONFIG_DOC("配置说明"),
     THEME("主题设置"),
+    NOTIFICATION("通知位置"),
     ABOUT("关于本软件")
 }
 
 /** 关于页要展示的软件信息，由调用方填，方便截图测试注入固定值 */
 data class AboutInfo(
     val appName: String = "AppTimer",
-    val versionName: String = "0.0.002",
-    val versionCode: Long = 2,
+    val versionName: String = "0.0.003",
+    val versionCode: Long = 3,
     val packageName: String = "com.appscheduler.lsposed",
     val minSdk: Int = 26,
     val lsposedVersion: String = "未检测到",
@@ -57,6 +59,10 @@ fun HelpScreen(
     onImportConfig: () -> Unit = {},
     themeSettings: ThemeSettings = ThemeSettings(),
     onSaveTheme: (ThemeSettings) -> Unit = {},
+    snackbarMode: String = Config.DEFAULT_SNACKBAR_MODE,
+    onSnackbarModeChange: (String) -> Unit = {},
+    onSnackbarReset: () -> Unit = {},
+    onPreviewSnackbar: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     when (page) {
@@ -74,6 +80,14 @@ fun HelpScreen(
             settings = themeSettings,
             onSave = onSaveTheme,
             onBack = onBack
+        )
+        HelpPage.NOTIFICATION -> NotificationSettingsScreen(
+            mode = snackbarMode,
+            onModeChange = onSnackbarModeChange,
+            onReset = onSnackbarReset,
+            onPreview = onPreviewSnackbar,
+            onBack = onBack,
+            modifier = modifier
         )
         HelpPage.ABOUT -> AboutPage(about = about, onBack = onBack, modifier = modifier)
     }
@@ -130,6 +144,12 @@ private fun HelpHome(
             title = "主题设置",
             subtitle = "按钮配色、背景图片、透明度与按时段自动切换",
             onClick = { onOpen(HelpPage.THEME) }
+        )
+
+        HelpEntry(
+            title = "通知位置",
+            subtitle = "提示条固定在顶部、底部，或按住自由拖动",
+            onClick = { onOpen(HelpPage.NOTIFICATION) }
         )
 
         HelpEntry(

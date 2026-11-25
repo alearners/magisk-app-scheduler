@@ -22,6 +22,17 @@ public class Config {
     /** 调度触发的时间基准：系统闹钟（alarm）或应用内部计时器（internal） */
     public static final String KEY_TIMER_MODE = "timer_mode";
 
+    /** 全局提示条停靠方式：顶部 / 底部 / 自由拖动 */
+    public static final String KEY_SNACKBAR_MODE = "snackbar_mode";
+    /** 自由拖动时保存的相对位置，取值 0–1，分别对应可移动范围的两端 */
+    public static final String KEY_SNACKBAR_X = "snackbar_x";
+    public static final String KEY_SNACKBAR_Y = "snackbar_y";
+
+    public static final String SNACKBAR_TOP = "top";
+    public static final String SNACKBAR_BOTTOM = "bottom";
+    public static final String SNACKBAR_FREE = "free";
+    public static final String DEFAULT_SNACKBAR_MODE = SNACKBAR_FREE;
+
     /** 是否已经勾选同意「使用说明与免责声明」；未同意前不排闹钟、不执行任何计划 */
     public static final String KEY_AGREED = "agreement_accepted";
 
@@ -124,6 +135,56 @@ public class Config {
     /** 内部计时器模式：不依赖系统闹钟，由前台服务自己数时间 */
     public boolean internalTimer() {
         return TIMER_INTERNAL.equals(timerMode());
+    }
+
+    /**
+     * 全局提示条停靠方式：顶部、底部或自由拖动。
+     * 旧配置没有这一项时按自由拖动处理，默认位置仍是顶部居中。
+     */
+    public String snackbarMode() {
+        String value = sp.getString(KEY_SNACKBAR_MODE, DEFAULT_SNACKBAR_MODE);
+        if (SNACKBAR_TOP.equals(value) || SNACKBAR_BOTTOM.equals(value)) {
+            return value;
+        }
+        return SNACKBAR_FREE;
+    }
+
+    public void setSnackbarMode(String mode) {
+        String value;
+        if (SNACKBAR_TOP.equals(mode)) {
+            value = SNACKBAR_TOP;
+        } else if (SNACKBAR_BOTTOM.equals(mode)) {
+            value = SNACKBAR_BOTTOM;
+        } else {
+            value = SNACKBAR_FREE;
+        }
+        sp.edit().putString(KEY_SNACKBAR_MODE, value).apply();
+    }
+
+    /** 自由拖动位置：横向 0–1，纵向 0–1 */
+    public float snackbarX() {
+        return clampFraction(sp.getFloat(KEY_SNACKBAR_X, 0.5f));
+    }
+
+    public float snackbarY() {
+        return clampFraction(sp.getFloat(KEY_SNACKBAR_Y, 0f));
+    }
+
+    public void saveSnackbarPosition(float x, float y) {
+        sp.edit()
+                .putFloat(KEY_SNACKBAR_X, clampFraction(x))
+                .putFloat(KEY_SNACKBAR_Y, clampFraction(y))
+                .apply();
+    }
+
+    private static float clampFraction(float value) {
+        if (value < 0f) {
+            return 0f;
+        }
+        if (value > 1f) {
+            return 1f;
+        }
+        return value;
     }
 
     /**

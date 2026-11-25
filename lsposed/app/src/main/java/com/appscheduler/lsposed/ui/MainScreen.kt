@@ -10,14 +10,20 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -28,12 +34,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import com.appscheduler.lsposed.Config
 import com.appscheduler.lsposed.LogStore
 import com.appscheduler.lsposed.R
@@ -84,6 +98,10 @@ fun MainScreen() {
     var autoLockDelay by remember { mutableStateOf(prefs.autoLockDelay().toString()) }
     var timerMode by remember { mutableStateOf(prefs.timerMode()) }
     var themeSettings by remember { mutableStateOf(ThemeSettings.load(context)) }
+    var snackbarMode by remember { mutableStateOf(prefs.snackbarMode()) }
+    var snackbarXFraction by remember { mutableStateOf(prefs.snackbarX()) }
+    var snackbarYFraction by remember { mutableStateOf(prefs.snackbarY()) }
+    var snackbarPositionVersion by remember { mutableStateOf(0) }
     var nowMinute by remember { mutableStateOf(currentMinuteOfDay()) }
 
     var logDate by remember { mutableStateOf(LogStore.today()) }
@@ -126,6 +144,42 @@ fun MainScreen() {
 
     fun toast(text: String) {
         scope.launch { snackbar.showSnackbar(text) }
+    }
+
+    /** 预览提示条停留更久，便于拖动确认位置 */
+    fun previewSnackbar() {
+        scope.launch {
+            snackbar.showSnackbar(
+                message = "提示条预览：可在「通知位置」中切换停靠方式，或按住拖动。",
+                duration = SnackbarDuration.Long
+            )
+        }
+    }
+
+    /** 「更多 → 通知位置」选择停靠方式后立即生效并持久化 */
+    fun changeSnackbarMode(next: String) {
+        snackbarMode = if (next == Config.SNACKBAR_TOP || next == Config.SNACKBAR_BOTTOM) {
+            next
+        } else {
+            Config.SNACKBAR_FREE
+        }
+        prefs.setSnackbarMode(snackbarMode)
+        snackbarPositionVersion++
+    }
+
+    /** 自由拖动结束后记录位置，按屏幕可用范围的比例保存 */
+    fun rememberSnackbarPosition(x: Float, y: Float) {
+        snackbarXFraction = x.coerceIn(0f, 1f)
+        snackbarYFraction = y.coerceIn(0f, 1f)
+        prefs.saveSnackbarPosition(snackbarXFraction, snackbarYFraction)
+    }
+
+    fun resetSnackbarPosition() {
+        snackbarXFraction = 0.5f
+        snackbarYFraction = 0f
+        prefs.saveSnackbarPosition(snackbarXFraction, snackbarYFraction)
+        snackbarPositionVersion++
+        toast("提示条位置已恢复为顶部居中。")
     }
 
     /**
@@ -189,6 +243,10 @@ fun MainScreen() {
         timerMode = prefs.timerMode()
         logLimitKb = prefs.logLimitKb()
         themeSettings = ThemeSettings.load(context)
+        snackbarMode = prefs.snackbarMode()
+        snackbarXFraction = prefs.snackbarX()
+        snackbarYFraction = prefs.snackbarY()
+        snackbarPositionVersion++
     }
 
     // 进页面、切到日志/概览 tab 时刷新对应的实时内容
@@ -671,7 +729,11 @@ fun MainScreen() {
                             onExportConfig = { exportLauncher.launch(ConfigTransfer.defaultFileName()) },
                             onImportConfig = { importLauncher.launch(arrayOf("*/*")) },
                             themeSettings = themeSettings,
-                            onSaveTheme = { saveTheme(it) }
+                            onSaveTheme = { saveTheme(it) },
+                            snackbarMode = snackbarMode,
+                            onSnackbarModeChange = { changeSnackbarMode(it) },
+                            onSnackbarReset = { resetSnackbarPosition() },
+                            onPreviewSnackbar = { previewSnackbar() }
                         )
                     }
                 }
@@ -683,16 +745,138 @@ fun MainScreen() {
             }
         }
         }
-        SnackbarHost(
+        DraggableSnackbarHost(
             hostState = snackbar,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+            mode = snackbarMode,
+            xFraction = snackbarXFraction,
+            yFraction = snackbarYFraction,
+            positionVersion = snackbarPositionVersion,
+            onPositionChange = { x, y -> rememberSnackbarPosition(x, y) }
         )
         }
         }
     }
+}
+
+/**
+ * 全局提示条：可按「更多 → 通知位置」停靠顶部、底部，或自由拖动。
+ * 自由拖动位置按可用移动范围的比例保存，换页、重启和横竖屏变化后仍能落在相近位置。
+ */
+@Composable
+private fun DraggableSnackbarHost(
+    hostState: SnackbarHostState,
+    mode: String,
+    xFraction: Float,
+    yFraction: Float,
+    positionVersion: Int,
+    onPositionChange: (Float, Float) -> Unit
+) {
+    val density = LocalDensity.current
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    var hostSize by remember { mutableStateOf(IntSize.Zero) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var fraction by remember {
+        mutableStateOf(Offset(xFraction.coerceIn(0f, 1f), yFraction.coerceIn(0f, 1f)))
+    }
+    var appliedVersion by remember { mutableStateOf(Int.MIN_VALUE) }
+    var appliedMode by remember { mutableStateOf("") }
+    var initialized by remember { mutableStateOf(false) }
+    val currentOnPositionChange by rememberUpdatedState(onPositionChange)
+
+    val sideMargin = with(density) { 16.dp.toPx() }
+    val topGap = with(density) { 12.dp.toPx() }
+    val bottomMargin = with(density) { 80.dp.toPx() }
+    val statusTop = with(density) { statusBarTop.toPx() }
+
+    fun bounds(): SnackbarBounds? {
+        if (containerSize == IntSize.Zero || hostSize == IntSize.Zero) return null
+        val baseX = (containerSize.width - hostSize.width) / 2f
+        val baseY = statusTop + topGap
+        val minX = sideMargin - baseX
+        val maxX = (containerSize.width - sideMargin - hostSize.width - baseX)
+            .coerceAtLeast(minX)
+        val maxY = (containerSize.height - bottomMargin - hostSize.height - baseY)
+            .coerceAtLeast(0f)
+        return SnackbarBounds(minX, maxX, 0f, maxY)
+    }
+
+    fun clamped(value: Offset, box: SnackbarBounds): Offset = Offset(
+        x = value.x.coerceIn(box.minX, box.maxX),
+        y = value.y.coerceIn(box.minY, box.maxY)
+    )
+
+    fun anchored(box: SnackbarBounds, value: Offset): Offset = when (mode) {
+        Config.SNACKBAR_TOP -> Offset(0f, 0f)
+        Config.SNACKBAR_BOTTOM -> Offset(0f, box.maxY)
+        else -> Offset(
+            x = box.minX + value.x.coerceIn(0f, 1f) * box.width,
+            y = box.minY + value.y.coerceIn(0f, 1f) * box.height
+        )
+    }
+
+    fun persistPosition() {
+        val box = bounds() ?: return
+        if (mode != Config.SNACKBAR_FREE) return
+        val x = ((offset.x - box.minX) / box.width).coerceIn(0f, 1f)
+        val y = ((offset.y - box.minY) / box.height).coerceIn(0f, 1f)
+        fraction = Offset(x, y)
+        currentOnPositionChange(x, y)
+    }
+
+    LaunchedEffect(containerSize, hostSize, mode, positionVersion) {
+        val box = bounds() ?: return@LaunchedEffect
+        val externalChange = !initialized || mode != appliedMode || positionVersion != appliedVersion
+        if (externalChange) {
+            fraction = Offset(xFraction.coerceIn(0f, 1f), yFraction.coerceIn(0f, 1f))
+            offset = anchored(box, fraction)
+            appliedMode = mode
+            appliedVersion = positionVersion
+            initialized = true
+        } else {
+            offset = clamped(offset, box)
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onSizeChanged { containerSize = it },
+        contentAlignment = Alignment.TopCenter
+    ) {
+        SnackbarHost(
+            hostState = hostState,
+            modifier = Modifier
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .offset {
+                    IntOffset(offset.x.roundToInt(), offset.y.roundToInt())
+                }
+                .onSizeChanged { hostSize = it }
+                .pointerInput(mode) {
+                    if (mode != Config.SNACKBAR_FREE) return@pointerInput
+                    detectDragGestures(
+                        onDragEnd = { persistPosition() },
+                        onDragCancel = { persistPosition() }
+                    ) { change, dragAmount ->
+                        change.consume()
+                        bounds()?.let { box ->
+                            offset = clamped(offset + dragAmount, box)
+                        }
+                    }
+                }
+        )
+    }
+}
+
+private data class SnackbarBounds(
+    val minX: Float,
+    val maxX: Float,
+    val minY: Float,
+    val maxY: Float
+) {
+    val width: Float get() = (maxX - minX).coerceAtLeast(1f)
+    val height: Float get() = (maxY - minY).coerceAtLeast(1f)
 }
 
 /** 是否已在系统省电白名单里（Paparazzi / layoutlib 里取不到时按「已放行」处理，避免截图与实际不符） */
