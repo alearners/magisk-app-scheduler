@@ -13,8 +13,8 @@ android {
         applicationId "com.appscheduler.lsposed"
         minSdk 26
         targetSdk 34
-        versionCode 3
-        versionName "0.0.003"
+        versionCode 4
+        versionName "0.0.004"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -37,7 +37,9 @@ android {
             minifyEnabled false
         }
         release {
-            minifyEnabled false
+            // 仓库产出的安装包统一做代码体积优化：R8 混淆压缩 + 资源裁剪
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig System.getenv('KEYSTORE_PATH') ? signingConfigs.releaseKey : signingConfigs.debug
         }

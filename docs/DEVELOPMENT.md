@@ -2,7 +2,7 @@
 
 本文档面向需要修改代码或从零复现的开发者。安装与使用请参见根目录 [`README.md`](../README.md) 与 [`lsposed/README.md`](../lsposed/README.md)。
 
-当前版本：`0.0.003`（versionCode 3，钩子常量 1）。本版本在 0.0.001 基础上新增主题设置、非法时间保存自动回滚与全局提示条自由拖动，保持既有界面默认配色。
+当前版本：`0.0.004`（versionCode 4，钩子常量 1）。本版本在 0.0.001 基础上新增主题设置、非法时间保存自动回滚与全局提示条自由拖动，保持既有界面默认配色。
 
 ## 工程结构
 
@@ -91,6 +91,7 @@ python ./gen_md.py
 
 - 包名、applicationId、`Config.PREFS`、权限名与 action 前缀均不得修改：一旦修改，LSPosed 作用域、签名权限与覆盖升级链将中断。
 - 版本变更须同步四处：`app/build.gradle`、`HelpScreen` 的 `AboutInfo`、README 版本表、Paparazzi 快照。
+- release 构建默认开启 R8（`minifyEnabled true`）与资源裁剪（`shrinkResources true`），对外产出必须是 release 优化包，不交付 debug 包。`assets/xposed_init` 按类名加载入口，`XposedEntry` 的 keep 规则不得删除；新增按字符串反射调用的类须同步补规则。
 - 文案面向普通用户，统一使用「App / 应用」，避免堆砌技术括号；当前统一采用正式书面语。
 - 不为应用锁定屏幕方向，也不修改系统的自动旋转设置。
 - `monkey` 作为可选启动方式必须保留，它是部分应用最后的兼容手段。

@@ -126,7 +126,7 @@ JSON 结构示例（`schema=1`）：
   "app": "AppTimer",
   "schema": 1,
   "exportedAt": "2026-11-24T11:00:00",
-  "versionName": "0.0.003",
+  "versionName": "0.0.004",
   "global": {
     "enabled": true, "password": "……", "manualFallback": true, "manualWait": 120,
     "autoLock": false, "autoLockDelay": 5, "timerMode": "alarm"
@@ -151,7 +151,7 @@ JSON 结构示例（`schema=1`）：
 | --- | --- |
 | applicationId | `com.appscheduler.lsposed` |
 | 显示名 | `AppTimer` |
-| 版本 | `versionCode 3` / `versionName 0.0.003` |
+| 版本 | `versionCode 4` / `versionName 0.0.004` |
 | 最低支持 | Android 8.0 |
 | 目标 SDK | 34 |
 | 签名 | 仓库固定密钥（`CN=App Scheduler, O=alearners, C=CN`），证书 SHA-256 `10948BFB9…000B2E5` |

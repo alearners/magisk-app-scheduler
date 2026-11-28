@@ -40,8 +40,8 @@ enum class HelpPage(val title: String) {
 /** 关于页要展示的软件信息，由调用方填，方便截图测试注入固定值 */
 data class AboutInfo(
     val appName: String = "AppTimer",
-    val versionName: String = "0.0.003",
-    val versionCode: Long = 3,
+    val versionName: String = "0.0.004",
+    val versionCode: Long = 4,
     val packageName: String = "com.appscheduler.lsposed",
     val minSdk: Int = 26,
     val lsposedVersion: String = "未检测到",

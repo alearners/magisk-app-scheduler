@@ -216,8 +216,8 @@ object ConfigTransfer {
     }
 
     private fun versionName(context: Context): String = try {
-        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0.0.003"
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0.0.004"
     } catch (t: PackageManager.NameNotFoundException) {
-        "0.0.003"
+        "0.0.004"
     }
 }
